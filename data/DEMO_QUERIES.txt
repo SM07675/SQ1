@@ -1,0 +1,13 @@
+BI-TEMPORAL
+A: demo_before_multispectral.tif
+B: demo_after_multispectral.tif
+Query: Has built-up area increased between these two dates?
+
+OPTICAL + SAR
+A: demo_optical_water.tif
+B: demo_sar_water.tif
+Query: Use optical and SAR evidence together to identify water-covered regions.
+
+SINGLE IMAGE
+A: demo_before_multispectral.tif
+Query: Highlight the largest water body.

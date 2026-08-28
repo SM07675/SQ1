@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: satquery
+      POSTGRES_USER: satquery
+      POSTGRES_PASSWORD: satquery_dev
+    volumes:
+      - satquery_db:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U satquery -d satquery"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./backend
+    environment:
+      SATQUERY_ENV: docker
+      SATQUERY_ARTIFACT_DIR: /app/artifacts
+      SATQUERY_CORS_ORIGINS: http://localhost:8080
+      SATQUERY_MAX_UPLOAD_MB: 256
+      SATQUERY_DATABASE_PATH: /app/artifacts/satquery.sqlite3
+      SATQUERY_TILE_SIZE: 448
+      SATQUERY_TILE_OVERLAP: 64
+      SATQUERY_MAX_MODEL_TILES: 64
+    volumes:
+      - satquery_artifacts:/app/artifacts
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  satquery_db:
+  satquery_artifacts:
