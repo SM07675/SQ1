@@ -512,23 +512,65 @@ def spectral_scene_analysis(path: Path, target: str | None, output_dir: Path) ->
 
 
 def optical_sar_water_fusion(optical: Path, sar: Path, output_dir: Path) -> dict[str, Any] | None:
+    from app.services.croma_pipeline import is_sar_image
+
+    # Auto-detect if inputs were passed in reverse order (SAR first, Optical second)
+    if is_sar_image(optical) and not is_sar_image(sar):
+        optical, sar = sar, optical
+
+    ndwi: np.ndarray | None = None
+    transform: Affine = Affine.identity()
+    crs: Any = None
+
+    # 1. Try Multispectral NDWI (Green + NIR)
     try:
         ndwi, transform, crs = read_index(optical, "ndwi")
-    except ValueError:
+    except Exception:
+        ndwi = None
+
+    # 2. Fallback to Optical RGB Water Index if multispectral Green/NIR bands not labeled
+    if ndwi is None:
+        try:
+            with rasterio.open(optical) as src_opt:
+                crs = src_opt.crs
+                ratio = min(1.0, 1024 / max(src_opt.width, src_opt.height))
+                out_w = max(1, round(src_opt.width * ratio))
+                out_h = max(1, round(src_opt.height * ratio))
+                transform = src_opt.transform * Affine.scale(src_opt.width / out_w, src_opt.height / out_h)
+                if src_opt.count >= 3:
+                    r = src_opt.read(1, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
+                    g = src_opt.read(2, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
+                    b = src_opt.read(3, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
+                    max_v = max(float(r.max()), float(g.max()), float(b.max()))
+                    if max_v > 1.0:
+                        r, g, b = r / 255.0, g / 255.0, b / 255.0
+                    brightness = (r + g + b) / 3.0
+                    green_red_ndwi = (g - r) / (g + r + 1e-5)
+                    blue_red_ratio = (b - r) / (b + r + 1e-5)
+                    ndwi = np.clip(blue_red_ratio * 0.6 + green_red_ndwi * 0.4 + (0.30 - brightness), -1.0, 1.0)
+                else:
+                    arr = src_opt.read(1, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
+                    ndwi = (arr - arr.min()) / max(arr.max() - arr.min(), 1e-5)
+        except Exception:
+            return None
+
+    if ndwi is None:
         return None
-    with rasterio.open(sar) as src:
-        ratio = min(1.0, 1024 / max(src.width, src.height))
-        out_w = max(1, round(src.width * ratio))
-        out_h = max(1, round(src.height * ratio))
-        radar = src.read(1, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
-    if radar.shape != ndwi.shape:
+
+    target_h, target_w = ndwi.shape
+    try:
+        with rasterio.open(sar) as src:
+            radar = src.read(1, out_shape=(target_h, target_w), resampling=Resampling.bilinear).astype("float32")
+    except Exception:
         return None
+
     finite = radar[np.isfinite(radar)]
     if not finite.size:
         return None
+
     low, high = np.percentile(finite, [2, 98])
     normalized = np.clip((radar - low) / max(high - low, 1e-7), 0, 1)
-    optical_water = np.isfinite(ndwi) & (ndwi >= 0.15)
+    optical_water = np.isfinite(ndwi) & (ndwi >= 0.12)
     sar_water = np.isfinite(normalized) & (normalized <= 0.28)
     agreement = _denoise(optical_water & sar_water)
     union = optical_water | sar_water

@@ -188,7 +188,7 @@ def normalize_and_register_pair(
                 resampling=Resampling.bilinear,
             )
             # Reproject B directly into A's coordinate window
-            data_b = np.zeros_like(data_a)
+            data_b = np.zeros((src_b.count, target_h, target_w), dtype="float32")
             reproject(
                 source=rasterio.band(src_b, list(range(1, src_b.count + 1))),
                 destination=data_b,

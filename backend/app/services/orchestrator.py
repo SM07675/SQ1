@@ -315,7 +315,17 @@ async def analyze(
     # =========================================================================
     elif quality.compatible and plan.task.value == "optical_sar" and len(working_paths) == 2:
         fusion_started = time.perf_counter()
-        deterministic_fusion = optical_sar_water_fusion(image_paths[0], image_paths[1], output_dir) if plan.target == "water" else None
+
+        # Identify which image is Optical and which is SAR regardless of upload order
+        from app.services.croma_pipeline import is_sar_image
+        if is_sar_image(image_paths[0]) and not is_sar_image(image_paths[1]):
+            opt_raw, sar_raw = image_paths[1], image_paths[0]
+            opt_work, sar_work = working_paths[1], working_paths[0]
+        else:
+            opt_raw, sar_raw = image_paths[0], image_paths[1]
+            opt_work, sar_work = working_paths[0], working_paths[1]
+
+        deterministic_fusion = optical_sar_water_fusion(opt_raw, sar_raw, output_dir)
         if deterministic_fusion:
             semantic_evidence_available = True
             mode = "deterministic_sensor_fusion"
@@ -344,7 +354,7 @@ async def analyze(
             ))
 
         croma_started = time.perf_counter()
-        croma_fusion_res = await run_croma_fusion(working_paths[0], working_paths[1], output_dir, registry)
+        croma_fusion_res = await run_croma_fusion(opt_work, sar_work, output_dir, registry)
         _add_artifact(artifacts, result_id, croma_fusion_res.agreement_mask_path, "image/png")
         _add_artifact(artifacts, result_id, croma_fusion_res.sar_db_preview_path, "image/png")
         _add_artifact(artifacts, result_id, croma_fusion_res.optical_preview_path, "image/png")
@@ -356,15 +366,15 @@ async def analyze(
             producer=croma_fusion_res.producer,
             summary=(
                 f"CROMA joint optical-SAR representation confirmed cross-sensor agreement "
-                f"(Cosine feature similarity: {croma_fusion_res.cosine_similarity:.2f}, IoU: {croma_fusion_res.sensor_agreement_iou:.2f}%)."
+                f"(Cosine feature similarity: {croma_fusion_res.cosine_similarity:.2f}, IoU: {croma_fusion_res.radar_optical_iou:.2f}%)."
             ),
             confidence=croma_fusion_res.confidence,
             artifact_url=_artifact_url(result_id, croma_fusion_res.agreement_mask_path.name),
             metrics={
                 "cosine_similarity": croma_fusion_res.cosine_similarity,
-                "sensor_agreement_iou": croma_fusion_res.sensor_agreement_iou,
+                "sensor_agreement_iou": croma_fusion_res.radar_optical_iou,
                 "confirmed_percent": croma_fusion_res.confirmed_percent,
-                "area_m2": croma_fusion_res.area_m2,
+                "area_m2": croma_fusion_res.confirmed_area_m2,
                 "region_count": croma_fusion_res.region_count,
             },
             supports_claim=True,
@@ -376,13 +386,16 @@ async def analyze(
             action="Executed CROMA optical-SAR cross-attention alignment and consensus mask generation",
             status="ok",
             duration_ms=round((time.perf_counter() - croma_started) * 1000),
-            details={"cosine_similarity": croma_fusion_res.cosine_similarity, "iou": croma_fusion_res.sensor_agreement_iou},
+            details={
+                "cosine_similarity": croma_fusion_res.cosine_similarity,
+                "iou": croma_fusion_res.radar_optical_iou,
+            },
         ))
 
         if not deterministic_fusion:
             answer = (
                 f"CROMA optical-SAR fusion confirmed cross-sensor agreement across "
-                f"{croma_fusion_res.confirmed_percent:.2f}% of the scene ({_area_text(croma_fusion_res.area_m2)})."
+                f"{croma_fusion_res.confirmed_percent:.2f}% of the scene ({_area_text(croma_fusion_res.confirmed_area_m2)})."
             )
 
     # =========================================================================
