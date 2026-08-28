@@ -1,5 +1,6 @@
 import type {
   AnalysisResponse,
+  AnalysisRunRecord,
   BenchmarkRunResponse,
   DatasetSummary,
   ModelCapability,
@@ -65,4 +66,28 @@ export async function runBenchmarkEvaluation(input: {
   }
   return response.json() as Promise<BenchmarkRunResponse>;
 }
+
+export async function fetchSpatialRuns(filters?: {
+  verdictStatus?: string;
+  taskType?: string;
+  limit?: number;
+}): Promise<AnalysisRunRecord[]> {
+  const params = new URLSearchParams();
+  if (filters?.verdictStatus) params.set("verdict_status", filters.verdictStatus);
+  if (filters?.taskType) params.set("task_type", filters.taskType);
+  if (filters?.limit) params.set("limit", String(filters.limit));
+  const url = `${API_BASE}/api/v1/spatial/runs${params.toString() ? `?${params}` : ""}`;
+  const response = await fetch(url);
+  if (!response.ok) return [];
+  return response.json() as Promise<AnalysisRunRecord[]>;
+}
+
+export async function fetchResultById(resultId: string): Promise<AnalysisResponse> {
+  const response = await fetch(`${API_BASE}/api/v1/results/${resultId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to load analysis result ${resultId} (HTTP ${response.status})`);
+  }
+  return response.json() as Promise<AnalysisResponse>;
+}
+
 

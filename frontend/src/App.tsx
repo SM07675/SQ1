@@ -1,17 +1,22 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState, useCallback } from "react";
 import {
   analyzeImages,
   fetchBenchmarkDatasets,
+  fetchResultById,
+  fetchSpatialRuns,
   modelCapabilities,
   runBenchmarkEvaluation,
 } from "./api";
 import { AnalysisStudio } from "./components/AnalysisStudio";
+import { ArchiveView } from "./components/ArchiveView";
 import { BenchmarkDashboard } from "./components/BenchmarkDashboard";
 import { ModelRail } from "./components/ModelRail";
-import { Sidebar } from "./components/Sidebar";
+import { ReportsView } from "./components/ReportsView";
+import { NavigationTab, Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import type {
   AnalysisResponse,
+  AnalysisRunRecord,
   BenchmarkRunResponse,
   DatasetSummary,
   ModelCapability,
@@ -92,7 +97,7 @@ function uniqueMetrics(result: AnalysisResponse | null): [string, unknown][] {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"analysis" | "benchmarks">("analysis");
+  const [activeTab, setActiveTab] = useState<NavigationTab>("analysis");
   const [query, setQuery] = useState(templates[0].query);
   const [pairType, setPairType] = useState(templates[0].pair);
   const [imageA, setImageA] = useState<File | null>(null);
@@ -104,6 +109,10 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [models, setModels] = useState<ModelCapability[]>([]);
 
+  // Evidence Archive & Reports State
+  const [runs, setRuns] = useState<AnalysisRunRecord[]>([]);
+  const [runsLoading, setRunsLoading] = useState(false);
+
   // Benchmark Dashboard State
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [selectedDataset, setSelectedDataset] = useState("vrsbench_sample_split");
@@ -112,10 +121,45 @@ export default function App() {
   const [benchResult, setBenchResult] = useState<BenchmarkRunResponse | null>(null);
   const [benchError, setBenchError] = useState<string | null>(null);
 
+  const refreshRuns = useCallback(async () => {
+    setRunsLoading(true);
+    try {
+      const data = await fetchSpatialRuns({ limit: 100 });
+      setRuns(data);
+    } catch {
+      // ignore
+    } finally {
+      setRunsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     modelCapabilities().then(setModels).catch(() => setModels([]));
     fetchBenchmarkDatasets().then(setDatasets).catch(() => setDatasets([]));
-  }, []);
+    refreshRuns();
+  }, [refreshRuns]);
+
+  async function handleLoadHistoricalResult(resultId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const loaded = await fetchResultById(resultId);
+      setResult(loaded);
+      if (loaded.query) setQuery(loaded.query);
+      if (loaded.task_plan?.task) {
+        const task = loaded.task_plan.task;
+        if (task === "bi_temporal_change") setPairType("bi_temporal");
+        else if (task === "optical_sar") setPairType("optical_sar");
+        else setPairType("single");
+      }
+      setActiveTab("analysis");
+      setActiveLayer("compare");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load historical result");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const availableLayers = useMemo(() => {
     if (!result) return ["compare"];
@@ -154,6 +198,7 @@ export default function App() {
         imageB: imageB ?? undefined,
       });
       setResult(response);
+      refreshRuns();
 
       // Auto-select the most relevant output layer
       if (response.artifacts.some((item) => item.name === "water_grounding_mask.png")) {
@@ -221,7 +266,7 @@ export default function App() {
         <ModelRail models={models} />
 
         {/* Tab Content */}
-        {activeTab === "analysis" ? (
+        {activeTab === "analysis" && (
           <AnalysisStudio
             result={result}
             templates={templates}
@@ -245,7 +290,9 @@ export default function App() {
             onSwipeChange={setSwipe}
             onSubmit={submitAnalysis}
           />
-        ) : (
+        )}
+
+        {activeTab === "benchmarks" && (
           <BenchmarkDashboard
             datasets={datasets}
             selectedDataset={selectedDataset}
@@ -256,6 +303,24 @@ export default function App() {
             onSelectDataset={setSelectedDataset}
             onSelectVariant={setSelectedVariant}
             onRunBenchmark={triggerBenchmark}
+          />
+        )}
+
+        {activeTab === "archive" && (
+          <ArchiveView
+            runs={runs}
+            loading={runsLoading}
+            onRefresh={refreshRuns}
+            onLoadResult={handleLoadHistoricalResult}
+          />
+        )}
+
+        {activeTab === "reports" && (
+          <ReportsView
+            runs={runs}
+            loading={runsLoading}
+            onRefresh={refreshRuns}
+            onLoadResult={handleLoadHistoricalResult}
           />
         )}
       </main>

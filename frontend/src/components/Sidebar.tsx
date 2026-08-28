@@ -1,8 +1,10 @@
 import React from "react";
 
+export type NavigationTab = "analysis" | "benchmarks" | "archive" | "reports";
+
 interface SidebarProps {
-  activeTab: "analysis" | "benchmarks";
-  onSelectTab: (tab: "analysis" | "benchmarks") => void;
+  activeTab: NavigationTab;
+  onSelectTab: (tab: NavigationTab) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
@@ -35,8 +37,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
 
         <button
           type="button"
-          className="nav-item"
-          onClick={() => onSelectTab("analysis")}
+          className={`nav-item ${activeTab === "archive" ? "nav-active" : ""}`}
+          onClick={() => onSelectTab("archive")}
           title="Spatial Evidence Archive"
         >
           <span className="nav-icon">⌖</span>
@@ -45,8 +47,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
 
         <button
           type="button"
-          className="nav-item"
-          onClick={() => onSelectTab("analysis")}
+          className={`nav-item ${activeTab === "reports" ? "nav-active" : ""}`}
+          onClick={() => onSelectTab("reports")}
           title="Audit Reports"
         >
           <span className="nav-icon">⇩</span>

@@ -1,8 +1,8 @@
-import React from "react";
+import type { NavigationTab } from "./Sidebar";
 
 interface TopBarProps {
-  activeTab: "analysis" | "benchmarks";
-  onSelectTab: (tab: "analysis" | "benchmarks") => void;
+  activeTab: NavigationTab;
+  onSelectTab: (tab: NavigationTab) => void;
   analysisMode?: string;
   isEngineOnline?: boolean;
 }
@@ -32,7 +32,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           onClick={() => onSelectTab("analysis")}
         >
           <span className="tab-dot" />
-          Analysis Studio
+          Studio
         </button>
         <button
           type="button"
@@ -42,7 +42,27 @@ export const TopBar: React.FC<TopBarProps> = ({
           onClick={() => onSelectTab("benchmarks")}
         >
           <span className="tab-dot" />
-          Benchmark Dashboard (Gates 6 & 7)
+          Benchmarks
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "archive"}
+          className={`tab-btn ${activeTab === "archive" ? "active" : ""}`}
+          onClick={() => onSelectTab("archive")}
+        >
+          <span className="tab-dot" />
+          Archive
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "reports"}
+          className={`tab-btn ${activeTab === "reports" ? "active" : ""}`}
+          onClick={() => onSelectTab("reports")}
+        >
+          <span className="tab-dot" />
+          Audit Reports
         </button>
       </div>
 

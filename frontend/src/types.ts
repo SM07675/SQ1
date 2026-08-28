@@ -155,3 +155,14 @@ export interface BenchmarkRunResponse {
   results: BenchmarkItemResult[];
 }
 
+export interface AnalysisRunRecord {
+  result_id: string;
+  task_type: string;
+  query_text: string;
+  verdict_status: string;
+  confidence: number;
+  created_at: string;
+  geometries_count: number;
+}
+
+
