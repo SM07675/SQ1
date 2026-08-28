@@ -1,9 +1,18 @@
 # SatQuery GeoProof v1.0 - SIH26167 Functional Prototype
 
-SatQuery GeoProof is an evidence-first remote-sensing assistant for the
-ISRO Smart India Hackathon problem statement SIH26167. It accepts GeoTIFF/TIFF
-imagery and natural-language queries, selects a typed workflow, produces visual
-and geospatial evidence, and blocks unsupported claims.
+[![SIH](https://img.shields.io/badge/SIH-26167-blue)]()
+[![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12-blue)]()
+[![React](https://img.shields.io/badge/React-19-61dafb)]()
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.116-009688)]()
+[![License](https://img.shields.io/badge/License-MIT-green)]()
+
+> **Evidence-first remote sensing assistant for ISRO Smart India Hackathon (SIH26167)**.
+> Ingests satellite imagery (GeoTIFF/NetCDF/Optical/SAR) and natural-language queries, autonomously routes them to specialized analytical engines and vision models, produces verifiable multi-layer visual/vector evidence, and applies a multi-witness arbitration protocol with calibrated uncertainty estimation.
+
+### 📚 Technical Documentation
+- **[System Architecture (End-to-End)](ARCHITECTURE.md)** — Detailed technical architecture, pipeline data flows, tech stack matrix, and guardrail arbitration.
+- **[Models & Algorithms](MODELS_USED_IN_ANALYSIS.md)** — Deep learning models (RemoteCLIP, TinyCD, Open-CD, CROMA, EarthDial) and physical spectral engines.
+- **[Validation & Benchmarks](VALIDATION.md)** — Test results, accuracy metrics, and Platt-scaled confidence calibration.
 
 ## Flagship working demonstrations
 
