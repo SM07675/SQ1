@@ -38,11 +38,6 @@ const templates = [
     pair: "optical_sar",
     query: "Use optical and SAR evidence together to identify water-covered regions.",
   },
-  {
-    label: "Vegetation loss",
-    pair: "bi_temporal",
-    query: "Where has vegetation decreased between these two dates?",
-  },
 ];
 
 const layerNames: Record<string, string> = {
