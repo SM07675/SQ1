@@ -1,5 +1,4 @@
-import React from "react";
-import { artifactUrl } from "../api";
+import { artifactUrl, downloadPdfReport } from "../api";
 import type { AnalysisResponse } from "../types";
 import { ConfidenceGauge } from "./ConfidenceGauge";
 import { StatusPill } from "./shared/StatusPill";
@@ -105,14 +104,15 @@ export const VerdictPanel: React.FC<VerdictPanelProps> = ({ result }) => {
         {/* Download Audit Reports & Artifacts */}
         <div className="download-actions">
           {report && (
-            <a
-              href={artifactUrl(report.url)}
-              download="GeoProof_Report.pdf"
+            <button
+              type="button"
+              onClick={() => downloadPdfReport(result.result_id, "GeoProof_Report.pdf")}
               className="download-btn primary-download"
+              title="Download publication-grade GeoProof PDF report"
             >
               <span>📄</span>
               <span>Download Audit Report (PDF)</span>
-            </a>
+            </button>
           )}
           <div className="secondary-downloads-row">
             {geojson && (

@@ -2,10 +2,16 @@ export type VerdictStatus = "supported" | "disputed" | "insufficient_evidence";
 
 export interface TaskPlan {
   task: string;
+  application?: string;
+  specific_task?: string;
+  sub_tasks?: string[];
+  multi_intent?: boolean;
   target?: string | null;
   asks_direction: boolean;
   tools: string[];
   reason: string;
+  aoi_text?: string | null;
+  years?: number[];
 }
 
 export interface RasterMetadata {

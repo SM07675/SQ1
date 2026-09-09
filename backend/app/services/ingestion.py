@@ -89,7 +89,9 @@ def _normalize(array: np.ndarray) -> np.ndarray:
         return np.zeros_like(values, dtype="uint8")
     low, high = np.percentile(finite, [2, 98])
     if high <= low:
-        return np.zeros_like(values, dtype="uint8")
+        if finite.size and finite.max() <= 1.0:
+            return (np.clip(values, 0, 1) * 255).astype("uint8")
+        return np.clip(values, 0, 255).astype("uint8")
     return (np.clip((values - low) / (high - low), 0, 1) * 255).astype("uint8")
 
 
@@ -137,7 +139,21 @@ def build_model_tiles(
                 gray = _normalize(data[0])
                 rgb = np.stack([gray, gray, gray], axis=-1)
             else:
-                rgb = np.stack([_normalize(data[index]) for index in range(3)], axis=-1)
+                if data.dtype == np.uint8:
+                    rgb = np.transpose(data[:3], (1, 2, 0))
+                elif np.nanmax(data) <= 1.0 and np.nanmin(data) >= 0.0:
+                    rgb = np.clip(np.transpose(data[:3], (1, 2, 0)) * 255.0, 0, 255).astype("uint8")
+                else:
+                    finite = data[np.isfinite(data)]
+                    if finite.size:
+                        low, high = np.percentile(finite, [2, 98])
+                        if high > low:
+                            norm_data = np.clip((data[:3] - low) / (high - low), 0, 1) * 255.0
+                            rgb = np.transpose(norm_data, (1, 2, 0)).astype("uint8")
+                        else:
+                            rgb = np.stack([_normalize(data[idx]) for idx in range(3)], axis=-1)
+                    else:
+                        rgb = np.zeros((tile_size, tile_size, 3), dtype="uint8")
             tile_path = tile_dir / f"tile_{sequence:04d}.png"
             Image.fromarray(rgb, mode="RGB").save(tile_path)
             left, bottom, right, top = window_bounds(window, src.transform)

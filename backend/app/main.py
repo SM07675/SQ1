@@ -9,6 +9,7 @@ from typing import Annotated
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
@@ -29,6 +30,7 @@ from app.services.ingestion import NETCDF_SUFFIXES, build_model_tiles, prepare_s
 from app.services.model_registry import registry
 from app.services.orchestrator import analyze
 from app.services.raster import inspect_raster, render_preview
+from app.services.report import write_pdf_report
 
 
 ALLOWED_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", *NETCDF_SUFFIXES}
@@ -55,6 +57,52 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/artifacts/{result_id}/GeoProof_Report.pdf")
+def get_artifact_pdf(result_id: str):
+    """Dynamically serves or generates GeoProof_Report.pdf on the fly."""
+    output_dir = settings.artifact_dir / result_id
+    pdf_path = output_dir / "GeoProof_Report.pdf"
+    if not pdf_path.exists():
+        payload = repository.get_result(result_id)
+        if payload is not None:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                pdf_path = write_pdf_report(output_dir, payload)
+            except Exception as exc:
+                raise HTTPException(500, f"Failed to generate PDF report: {exc}") from exc
+    if pdf_path.exists():
+        return FileResponse(
+            path=pdf_path,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"inline; filename=GeoProof_Report_{result_id[:8]}.pdf"},
+        )
+    raise HTTPException(404, "Report not found")
+
+
+@app.get("/api/v1/results/{result_id}/report")
+@app.get("/api/v1/results/{result_id}/pdf")
+def get_result_pdf(result_id: str):
+    """Direct API endpoint for retrieving or generating the PDF audit report."""
+    output_dir = settings.artifact_dir / result_id
+    pdf_path = output_dir / "GeoProof_Report.pdf"
+    if not pdf_path.exists():
+        payload = repository.get_result(result_id)
+        if payload is None:
+            raise HTTPException(404, "Result not found")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            pdf_path = write_pdf_report(output_dir, payload)
+        except Exception as exc:
+            raise HTTPException(500, f"Failed to generate PDF report: {exc}") from exc
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=GeoProof_Report_{result_id[:8]}.pdf"},
+    )
+
+
 settings.artifact_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/artifacts", StaticFiles(directory=settings.artifact_dir), name="artifacts")
 repository.init()

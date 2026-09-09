@@ -13,6 +13,13 @@ class TaskType(str, Enum):
     OPTICAL_SAR = "optical_sar"
     SCENE_DESCRIPTION = "scene_description"
     SPECTRAL_INDEX = "spectral_index"
+    LAND_COVER = "land_cover"
+    OBJECT_IDENTIFICATION = "object_identification"
+    VEGETATION_ANALYSIS = "vegetation_analysis"
+    WATER_ANALYSIS = "water_analysis"
+    BUILT_UP_ANALYSIS = "built_up_analysis"
+    UNSUPPORTED = "unsupported"
+    UNCLEAR = "unclear"
 
 
 class VerdictStatus(str, Enum):
@@ -23,6 +30,10 @@ class VerdictStatus(str, Enum):
 
 class TaskPlan(BaseModel):
     task: TaskType
+    application: str = "single_image"  # "single_image" | "bi_temporal" | "optical_sar" | "unsupported" | "unclear"
+    specific_task: str = "scene_description"
+    sub_tasks: list[str] = Field(default_factory=list)
+    multi_intent: bool = False
     target: str | None = None
     asks_direction: bool = False
     tools: list[str]

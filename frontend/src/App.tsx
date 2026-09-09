@@ -10,8 +10,10 @@ import {
 import { AnalysisStudio } from "./components/AnalysisStudio";
 import { ArchiveView } from "./components/ArchiveView";
 import { BenchmarkDashboard } from "./components/BenchmarkDashboard";
+import { GlobalAnalysisView } from "./components/GlobalAnalysisView";
 import { ModelRail } from "./components/ModelRail";
 import { ReportsView } from "./components/ReportsView";
+import { SettingsView } from "./components/SettingsView";
 import { NavigationTab, Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import type {
@@ -66,7 +68,7 @@ const layerNames: Record<string, string> = {
   "ndvi.png": "NDVI Canopy",
   "ndbi.png": "NDBI Index",
   "ndwi_optical.png": "Optical NDWI",
-  "remoteclip_top_tiles_mosaic.png": "RemoteCLIP Retrieval",
+  "remoteclip_top_tiles_mosaic.png": "Query-Matching Regions (Semantic Grounding)",
 };
 
 function uniqueMetrics(result: AnalysisResponse | null): [string, unknown][] {
@@ -92,7 +94,7 @@ function uniqueMetrics(result: AnalysisResponse | null): [string, unknown][] {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<NavigationTab>("analysis");
+  const [activeTab, setActiveTab] = useState<NavigationTab>("global");
   const [query, setQuery] = useState(templates[0].query);
   const [pairType, setPairType] = useState(templates[0].pair);
   const [imageA, setImageA] = useState<File | null>(null);
@@ -134,6 +136,20 @@ export default function App() {
     refreshRuns();
   }, [refreshRuns]);
 
+  const handleTabChange = (tab: NavigationTab) => {
+    setActiveTab(tab);
+    if (tab === "single") {
+      setPairType("single");
+      setQuery("Highlight the largest water body.");
+    } else if (tab === "bi_temporal") {
+      setPairType("bi_temporal");
+      setQuery("Has built-up area increased between these two dates?");
+    } else if (tab === "optical_sar") {
+      setPairType("optical_sar");
+      setQuery("Use optical and SAR evidence together to identify water-covered regions.");
+    }
+  };
+
   async function handleLoadHistoricalResult(resultId: string) {
     setBusy(true);
     setError(null);
@@ -147,7 +163,7 @@ export default function App() {
         else if (task === "optical_sar") setPairType("optical_sar");
         else setPairType("single");
       }
-      setActiveTab("analysis");
+      setActiveTab("global");
       setActiveLayer("compare");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load historical result");
@@ -169,6 +185,54 @@ export default function App() {
   function handleSelectTemplate(tpl: (typeof templates)[0]) {
     setQuery(tpl.query);
     setPairType(tpl.pair);
+  }
+
+  const selectDefaultActiveLayer = (response: AnalysisResponse) => {
+    if (response.artifacts.some((item) => item.name === "water_grounding_mask.png")) {
+      setActiveLayer("water_grounding_mask.png");
+    } else if (response.artifacts.some((item) => item.name === "water_mask.png")) {
+      setActiveLayer("water_mask.png");
+    } else if (response.artifacts.some((item) => item.name === "semantic_change_mask.png")) {
+      setActiveLayer("semantic_change_mask.png");
+    } else if (response.artifacts.some((item) => item.name === "sensor_agreement.png")) {
+      setActiveLayer("sensor_agreement.png");
+    } else if (response.artifacts.some((item) => item.name === "change_mask.png")) {
+      setActiveLayer("change_mask.png");
+    } else if (response.artifacts.some((item) => item.name === "preview_2.png")) {
+      setActiveLayer("compare");
+    } else {
+      setActiveLayer("preview_1.png");
+    }
+  };
+
+  async function handleExecuteGlobalAnalysis(execQuery: string, files: File[]) {
+    if (files.length === 0) {
+      setError("Please provide at least one image.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const response = await analyzeImages({
+        query: execQuery,
+        pairType: "auto",
+        imageA: files[0],
+        imageB: files.length > 1 ? files[1] : undefined,
+      });
+      setResult(response);
+      refreshRuns();
+      selectDefaultActiveLayer(response);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Global Analysis engine encountered an error."
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitAnalysis(event: FormEvent) {
@@ -194,23 +258,7 @@ export default function App() {
       });
       setResult(response);
       refreshRuns();
-
-      // Auto-select the most relevant output layer
-      if (response.artifacts.some((item) => item.name === "water_grounding_mask.png")) {
-        setActiveLayer("water_grounding_mask.png");
-      } else if (response.artifacts.some((item) => item.name === "water_mask.png")) {
-        setActiveLayer("water_mask.png");
-      } else if (response.artifacts.some((item) => item.name === "semantic_change_mask.png")) {
-        setActiveLayer("semantic_change_mask.png");
-      } else if (response.artifacts.some((item) => item.name === "sensor_agreement.png")) {
-        setActiveLayer("sensor_agreement.png");
-      } else if (response.artifacts.some((item) => item.name === "change_mask.png")) {
-        setActiveLayer("change_mask.png");
-      } else if (response.artifacts.some((item) => item.name === "preview_2.png")) {
-        setActiveLayer("compare");
-      } else {
-        setActiveLayer("preview_1.png");
-      }
+      selectDefaultActiveLayer(response);
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -245,14 +293,14 @@ export default function App() {
   return (
     <div className="app-shell">
       {/* Navigation Sidebar */}
-      <Sidebar activeTab={activeTab} onSelectTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} onSelectTab={handleTabChange} />
 
       {/* Main Geospatial Workspace */}
       <main className="workspace">
         {/* Top Header & Branding Bar */}
         <TopBar
           activeTab={activeTab}
-          onSelectTab={setActiveTab}
+          onSelectTab={handleTabChange}
           analysisMode={result?.mode}
           isEngineOnline={true}
         />
@@ -261,7 +309,24 @@ export default function App() {
         <ModelRail models={models} />
 
         {/* Tab Content */}
-        {activeTab === "analysis" && (
+        {activeTab === "global" && (
+          <GlobalAnalysisView
+            result={result}
+            busy={busy}
+            error={error}
+            activeLayer={activeLayer}
+            availableLayers={availableLayers}
+            layerNames={layerNames}
+            swipe={swipe}
+            uniqueMetrics={calculatedMetrics}
+            onSelectLayer={setActiveLayer}
+            onSwipeChange={setSwipe}
+            onExecuteGlobalAnalysis={handleExecuteGlobalAnalysis}
+            onLoadHistoricalResult={handleLoadHistoricalResult}
+          />
+        )}
+
+        {(activeTab === "single" || activeTab === "bi_temporal" || activeTab === "optical_sar") && (
           <AnalysisStudio
             result={result}
             templates={templates}
@@ -287,7 +352,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === "benchmarks" && (
+        {activeTab === "models" && (
           <BenchmarkDashboard
             datasets={datasets}
             selectedDataset={selectedDataset}
@@ -318,6 +383,8 @@ export default function App() {
             onLoadResult={handleLoadHistoricalResult}
           />
         )}
+
+        {activeTab === "settings" && <SettingsView />}
       </main>
     </div>
   );

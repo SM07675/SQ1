@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import type { AnalysisRunRecord } from "../types";
-import { artifactUrl } from "../api";
+import { artifactUrl, downloadPdfReport } from "../api";
 
 interface ReportsViewProps {
   runs: AnalysisRunRecord[];
@@ -92,13 +92,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 <span>📄 View Latest Audit Report</span>
                 <span className="btn-arrow">↗</span>
               </a>
-              <a
-                href={latestReportUrl}
-                download={`GeoProof_Report_${latestRun.result_id.slice(0, 8)}.pdf`}
+              <button
+                type="button"
+                onClick={() => downloadPdfReport(latestRun.result_id, `GeoProof_Report_${latestRun.result_id.slice(0, 8)}.pdf`)}
                 className="hero-secondary-btn"
+                title="Download publication-grade GeoProof PDF report"
               >
                 <span>⇩ Download Latest PDF</span>
-              </a>
+              </button>
             </div>
           )}
         </div>
@@ -289,14 +290,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                         )}
 
                         {pdfUrl && (
-                          <a
-                            href={pdfUrl}
-                            download={`GeoProof_Report_${run.result_id.slice(0, 8)}.pdf`}
+                          <button
+                            type="button"
+                            onClick={() => downloadPdfReport(run.result_id, `GeoProof_Report_${run.result_id.slice(0, 8)}.pdf`)}
                             className="btn-download-pdf"
-                            title="Download PDF directly"
+                            title="Download publication-grade GeoProof PDF report"
                           >
                             ⇩
-                          </a>
+                          </button>
                         )}
 
                         <button
@@ -339,13 +340,14 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
                 >
                   ↗ Open in Full Tab
                 </a>
-                <a
-                  href={selectedPdfUrl}
-                  download={`GeoProof_Report_${selectedResultId?.slice(0, 8)}.pdf`}
+                <button
+                  type="button"
+                  onClick={() => selectedResultId && downloadPdfReport(selectedResultId, `GeoProof_Report_${selectedResultId.slice(0, 8)}.pdf`)}
                   className="modal-download-btn"
+                  title="Download publication-grade GeoProof PDF report"
                 >
                   ⇩ Download PDF
-                </a>
+                </button>
                 <button
                   type="button"
                   className="modal-close-btn"

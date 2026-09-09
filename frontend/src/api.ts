@@ -14,6 +14,40 @@ export function artifactUrl(path?: string | null): string | undefined {
   return `${API_BASE}${path}`;
 }
 
+export async function downloadPdfReport(resultId: string, customFilename?: string): Promise<void> {
+  const filename = customFilename || `GeoProof_Report_${resultId.slice(0, 8)}.pdf`;
+  const url = artifactUrl(`/artifacts/${resultId}/GeoProof_Report.pdf`);
+  if (!url) return;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to download report (HTTP ${response.status})`);
+    }
+    const blob = await response.blob();
+    const pdfBlob = new Blob([blob], { type: "application/pdf" });
+    const blobUrl = window.URL.createObjectURL(pdfBlob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename.endsWith(".pdf") ? filename : `${filename}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+  } catch (err) {
+    console.error("Blob download failed, opening direct link:", err);
+    const directUrl = artifactUrl(`/artifacts/${resultId}/GeoProof_Report.pdf?download=true`);
+    if (directUrl) {
+      const fallbackLink = document.createElement("a");
+      fallbackLink.href = directUrl;
+      fallbackLink.download = filename;
+      document.body.appendChild(fallbackLink);
+      fallbackLink.click();
+      document.body.removeChild(fallbackLink);
+    }
+  }
+}
+
 export async function analyzeImages(input: {
   query: string;
   pairType: string;

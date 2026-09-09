@@ -1,3 +1,4 @@
+import React from "react";
 import type { NavigationTab } from "./Sidebar";
 
 interface TopBarProps {
@@ -27,22 +28,32 @@ export const TopBar: React.FC<TopBarProps> = ({
         <button
           type="button"
           role="tab"
-          aria-selected={activeTab === "analysis"}
-          className={`tab-btn ${activeTab === "analysis" ? "active" : ""}`}
-          onClick={() => onSelectTab("analysis")}
+          aria-selected={activeTab === "global"}
+          className={`tab-btn ${activeTab === "global" ? "active" : ""}`}
+          onClick={() => onSelectTab("global")}
         >
           <span className="tab-dot" />
-          Studio
+          Global Analysis
         </button>
         <button
           type="button"
           role="tab"
-          aria-selected={activeTab === "benchmarks"}
-          className={`tab-btn ${activeTab === "benchmarks" ? "active" : ""}`}
-          onClick={() => onSelectTab("benchmarks")}
+          aria-selected={activeTab === "single" || activeTab === "bi_temporal" || activeTab === "optical_sar"}
+          className={`tab-btn ${activeTab === "single" || activeTab === "bi_temporal" || activeTab === "optical_sar" ? "active" : ""}`}
+          onClick={() => onSelectTab("single")}
         >
           <span className="tab-dot" />
-          Benchmarks
+          Specialized Workflows
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "models"}
+          className={`tab-btn ${activeTab === "models" ? "active" : ""}`}
+          onClick={() => onSelectTab("models")}
+        >
+          <span className="tab-dot" />
+          Model Registry
         </button>
         <button
           type="button"
@@ -52,17 +63,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           onClick={() => onSelectTab("archive")}
         >
           <span className="tab-dot" />
-          Archive
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "reports"}
-          className={`tab-btn ${activeTab === "reports" ? "active" : ""}`}
-          onClick={() => onSelectTab("reports")}
-        >
-          <span className="tab-dot" />
-          Audit Reports
+          History
         </button>
       </div>
 
@@ -73,7 +74,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             {isEngineOnline ? "ANALYSIS ENGINE ONLINE" : "ENGINE OFFLINE"}
           </strong>
           <small className="engine-mode">
-            {analysisMode ? analysisMode.replace(/_/g, " ").toUpperCase() : "Awaiting inputs"}
+            {analysisMode ? analysisMode.replace(/_/g, " ").toUpperCase() : activeTab.replace(/_/g, " ").toUpperCase()}
           </small>
         </div>
       </div>

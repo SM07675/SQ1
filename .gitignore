@@ -30,8 +30,12 @@ backend/artifacts/*
 !backend/artifacts/.gitkeep
 *.sqlite3
 *.sqlite3-journal
+backend/temp_test*
+backend/test_out*
+backend/*.png
 
 # OS files
 .DS_Store
 Thumbs.db
+
 

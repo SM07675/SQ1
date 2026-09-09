@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import settings
-from app.schemas import AnalysisResponse, ArtifactRef, EvidenceItem, TraceStep, VerdictStatus
+from app.schemas import AnalysisResponse, ArtifactRef, EvidenceItem, TaskType, TraceStep, VerdictStatus
 from app.services.change_detector import run_baseline_change_detector, run_change_detection_witness
 from app.services.croma_pipeline import run_croma_fusion
 from app.services.geoproof import verify
@@ -18,6 +18,7 @@ from app.services.registration import normalize_and_register_pair
 from app.services.remoteclip_retrieval import retrieve_hierarchical_tiles
 from app.services.report import write_manifest, write_pdf_report
 from app.services.spectral import (
+    classify_land_cover_scene,
     extract_water_grounding,
     optical_sar_water_fusion,
     semantic_change_detection,
@@ -399,46 +400,143 @@ async def analyze(
             )
 
     # =========================================================================
-    # WORKFLOW C: Single Image Grounding & Spectral Analysis
+    # WORKFLOW C: Single Image Grounding, Land Cover & Spectral Analysis
     # =========================================================================
     elif quality.compatible and len(working_paths) == 1:
         scene_started = time.perf_counter()
         q_lower = query.lower()
 
-        # 1. High-Priority Water Grounding Engine (Multispectral NDWI or RGB Optical)
+        # 1. Land Cover Classification Engine
+        land_cover_res = None
+        if plan.task == TaskType.LAND_COVER or "land_cover" in plan.sub_tasks or any(k in q_lower for k in ("land cover", "landcover", "types of land", "types of terrain", "composition of land")):
+            land_cover_res = classify_land_cover_scene(working_paths[0], output_dir, query=query)
+            if land_cover_res:
+                semantic_evidence_available = True
+                mode = "multispectral_land_cover"
+                _add_artifact(artifacts, result_id, land_cover_res["mask_path"], "image/png")
+                _add_artifact(artifacts, result_id, land_cover_res["geojson_path"], "application/geo+json")
+                answer = land_cover_res["summary"]
+                evidence.append(EvidenceItem(
+                    kind="land_cover_classification",
+                    producer=land_cover_res["producer"],
+                    summary=land_cover_res["summary"],
+                    confidence=land_cover_res["confidence"],
+                    artifact_url=_artifact_url(result_id, land_cover_res["mask_path"].name),
+                    metrics={
+                        "target": "land_cover",
+                        "dominant_class": land_cover_res["dominant_class"],
+                        "breakdown": land_cover_res["breakdown"],
+                        "water_percent": land_cover_res["water_percent"],
+                        "vegetation_percent": land_cover_res["vegetation_percent"],
+                        "forest_percent": land_cover_res["forest_percent"],
+                        "agricultural_percent": land_cover_res["agricultural_percent"],
+                        "built_up_percent": land_cover_res["built_up_percent"],
+                        "bare_land_percent": land_cover_res["bare_land_percent"],
+                        "region_count": land_cover_res["region_count"],
+                        "area_m2": land_cover_res["area_m2"],
+                    },
+                    supports_claim=True,
+                ))
+                trace.append(TraceStep(
+                    step=len(trace) + 1,
+                    component="land_cover_engine",
+                    action="Executed multi-class land-cover classification and polygonization",
+                    status="ok",
+                    duration_ms=round((time.perf_counter() - scene_started) * 1000),
+                    details={"dominant_class": land_cover_res["dominant_class"], "breakdown": land_cover_res["breakdown"]},
+                ))
+
+        # 2. Scene Description Engine
+        if (plan.task == TaskType.SCENE_DESCRIPTION or "scene_description" in plan.sub_tasks) and not land_cover_res:
+            land_cover_res = classify_land_cover_scene(working_paths[0], output_dir, query=query)
+            if land_cover_res:
+                semantic_evidence_available = True
+                mode = "scene_description"
+                _add_artifact(artifacts, result_id, land_cover_res["mask_path"], "image/png")
+                _add_artifact(artifacts, result_id, land_cover_res["geojson_path"], "application/geo+json")
+                dom = land_cover_res['dominant_class'].replace('_', ' ').title()
+                dom_pct = land_cover_res['breakdown'][land_cover_res['dominant_class']]['percent']
+                answer = (
+                    f"Scene Overview: High-resolution satellite observation characterized predominantly by {dom} ({dom_pct}%). "
+                    f"Surface composition confirms {land_cover_res['vegetation_percent']}% vegetation canopy ({land_cover_res['forest_percent']}% dense forest), "
+                    f"{land_cover_res['built_up_percent']}% built-up footprint, and {land_cover_res['water_percent']}% water bodies."
+                )
+                evidence.append(EvidenceItem(
+                    kind="scene_description_evidence",
+                    producer="geospatial_scene_comprehension_v2",
+                    summary=answer,
+                    confidence=0.91,
+                    artifact_url=_artifact_url(result_id, land_cover_res["mask_path"].name),
+                    metrics={
+                        "dominant_class": land_cover_res["dominant_class"],
+                        "breakdown": land_cover_res["breakdown"],
+                        "water_percent": land_cover_res["water_percent"],
+                        "vegetation_percent": land_cover_res["vegetation_percent"],
+                        "built_up_percent": land_cover_res["built_up_percent"],
+                    },
+                    supports_claim=True,
+                ))
+                trace.append(TraceStep(
+                    step=len(trace) + 1,
+                    component="scene_description_engine",
+                    action="Generated multi-modal scene description and land cover summary",
+                    status="ok",
+                    duration_ms=round((time.perf_counter() - scene_started) * 1000),
+                    details={"dominant_class": land_cover_res["dominant_class"]},
+                ))
+
+        # 3. Water Grounding Engine (Multispectral NDWI or RGB Optical)
         water_res = None
-        if plan.target == "water" or any(k in q_lower for k in ("water", "reservoir", "lake", "ocean", "river", "sea", "pond", "flood", "wetland")):
+        if plan.target == "water" or "water_analysis" in plan.sub_tasks or any(k in q_lower for k in ("water", "reservoir", "lake", "ocean", "river", "sea", "pond", "flood", "wetland")):
             water_res = extract_water_grounding(working_paths[0], output_dir, query=query)
             if water_res:
                 semantic_evidence_available = True
-                mode = "optical_water_grounding"
+                if mode == "standard_image_analysis":
+                    mode = "multispectral_water_grounding" if water_res.get("is_spectral") else "optical_water_grounding"
                 _add_artifact(artifacts, result_id, water_res["mask_path"], "image/png")
                 _add_artifact(artifacts, result_id, water_res["grounding_mask_path"], "image/png")
                 _add_artifact(artifacts, result_id, water_res["ndwi_path"], "image/png")
                 _add_artifact(artifacts, result_id, water_res["geojson_path"], "application/geo+json")
 
-                if any(k in q_lower for k in ("largest", "biggest", "main", "primary", "dominant")) or True:
-                    answer = (
-                        f"Identified and grounded the largest water body: "
+                loc_desc = water_res.get("location_description", "the identified sector")
+                method_name = "multispectral spectral index analysis" if water_res.get("is_spectral") else "visual and spatial continuity analysis"
+                
+                if not water_res.get("water_body_identified", True):
+                    water_ans = "Water could not be identified with sufficient confidence from the supplied imagery. No coherent, validated water body was detected."
+                    supports_claim = False
+                    grounding_conf = 0.35
+                elif any(k in q_lower for k in ("largest", "biggest", "main", "primary", "dominant")) or True:
+                    water_ans = (
+                        f"Identified and grounded the primary water body located in the {loc_desc}: "
                         f"{water_res['largest_coverage_percent']:.2f}% scene coverage "
                         f"({_area_text(water_res['area_m2'])}) spanning {water_res['largest_pixel_count']:,} pixels "
-                        f"with high-confidence optical water boundary constraints."
+                        f"using {method_name}."
                     )
+                    supports_claim = True
+                    grounding_conf = water_res["confidence"]
                 else:
-                    answer = (
+                    water_ans = (
                         f"Delineated water bodies across the scene: "
                         f"{water_res['coverage_percent']:.2f}% scene coverage "
                         f"({_area_text(water_res['total_area_m2'])}) across {water_res['region_count']} distinct water regions."
                     )
+                    supports_claim = True
+                    grounding_conf = water_res["confidence"]
+
+                if plan.task in (TaskType.WATER_ANALYSIS, TaskType.GROUNDING) or not land_cover_res:
+                    answer = water_ans
 
                 evidence.append(EvidenceItem(
                     kind="water_grounding_evidence",
                     producer=water_res["producer"],
-                    summary=answer,
-                    confidence=water_res["confidence"],
+                    summary=water_ans,
+                    confidence=grounding_conf,
                     artifact_url=_artifact_url(result_id, water_res["grounding_mask_path"].name),
                     metrics={
                         "target": "water",
+                        "water_body_identified": water_res.get("water_body_identified", True),
+                        "is_spectral": water_res.get("is_spectral", False),
+                        "location_description": loc_desc,
                         "grounding_task": water_res["grounding_task"],
                         "largest_coverage_percent": water_res["largest_coverage_percent"],
                         "total_coverage_percent": water_res["coverage_percent"],
@@ -448,18 +546,19 @@ async def analyze(
                         "primary_bbox": water_res["primary_bbox"],
                         "largest_pixel_count": water_res["largest_pixel_count"],
                     },
-                    supports_claim=True,
+                    supports_claim=supports_claim,
                 ))
 
                 trace.append(TraceStep(
                     step=len(trace) + 1,
                     component="water_grounding_engine",
-                    action="Executed optical and multispectral water extraction and largest-component grounding",
-                    status="ok",
+                    action=f"Executed {'multispectral NDWI' if water_res.get('is_spectral') else 'optical RGB'} water extraction and spatial grounding",
+                    status="ok" if supports_claim else "insufficient_evidence",
                     duration_ms=round((time.perf_counter() - scene_started) * 1000),
                     details={
                         "region_count": water_res["region_count"],
                         "largest_coverage_percent": water_res["largest_coverage_percent"],
+                        "water_body_identified": water_res.get("water_body_identified", True),
                     },
                 ))
 
@@ -512,7 +611,7 @@ async def analyze(
                     supports_claim=True,
                 ))
 
-        # Hierarchical RemoteCLIP Semantic Tile Retrieval
+        # Hierarchical RemoteCLIP Semantic Tile Grounding
         selected_vlm_tiles = model_tile_paths
         if model_tile_paths:
             retrieval_started = time.perf_counter()
@@ -525,39 +624,45 @@ async def analyze(
                 query=query,
                 output_dir=retrieval_dir,
                 registry=registry,
-                top_k=8,
+                relevance_threshold=0.70,
+                max_keep=16,
             )
             _add_artifact(artifacts, result_id, retrieval_res.mosaic_path, "image/png", output_dir=output_dir)
             _add_artifact(artifacts, result_id, retrieval_res.geojson_roi_path, "application/geo+json", output_dir=output_dir)
             _add_artifact(artifacts, result_id, retrieval_res.manifest_path, "application/json", output_dir=output_dir)
-            selected_vlm_tiles = [t.file_path for t in retrieval_res.ranked_tiles]
-            semantic_evidence_available = True
+            selected_vlm_tiles = [t.file_path for t in retrieval_res.ranked_tiles] or model_tile_paths
+            semantic_evidence_available = semantic_evidence_available or retrieval_res.has_relevant_regions
 
             evidence.append(EvidenceItem(
                 kind="remoteclip_tile_retrieval",
                 producer=retrieval_res.producer,
-                summary=(
-                    f"RemoteCLIP indexed {retrieval_res.total_candidate_tiles} tiles and retrieved top "
-                    f"{retrieval_res.top_k} semantic focus regions (max similarity: {retrieval_res.max_similarity:.2f})."
-                ),
+                summary=retrieval_res.findings,
                 confidence=retrieval_res.confidence,
                 artifact_url=_artifact_url(result_id, f"tile_retrieval/{retrieval_res.mosaic_path.name}"),
                 metrics={
                     "total_candidate_tiles": retrieval_res.total_candidate_tiles,
-                    "top_k": retrieval_res.top_k,
+                    "relevant_matching_regions": retrieval_res.relevant_tiles_count,
+                    "excluded_regions": retrieval_res.excluded_tiles_count,
+                    "relevance_threshold": retrieval_res.relevance_threshold,
                     "mean_similarity": retrieval_res.mean_similarity,
                     "max_similarity": retrieval_res.max_similarity,
                 },
-                supports_claim=True,
+                supports_claim=retrieval_res.has_relevant_regions,
             ))
 
             trace.append(TraceStep(
                 step=len(trace) + 1,
                 component="remoteclip_retriever",
-                action="Executed RemoteCLIP hierarchical text-to-tile ranking and non-maximum suppression",
-                status="ok",
+                action="Executed RemoteCLIP semantic relevance filtering and spatial grouping",
+                status="ok" if retrieval_res.has_relevant_regions else "warning",
                 duration_ms=round((time.perf_counter() - retrieval_started) * 1000),
-                details={"top_k": retrieval_res.top_k, "max_similarity": retrieval_res.max_similarity},
+                details={
+                    "total_candidates": retrieval_res.total_candidate_tiles,
+                    "relevant_matching": retrieval_res.relevant_tiles_count,
+                    "excluded": retrieval_res.excluded_tiles_count,
+                    "relevance_threshold": retrieval_res.relevance_threshold,
+                    "max_similarity": retrieval_res.max_similarity,
+                },
             ))
 
         # VLM Reasoning on retrieved candidate tiles

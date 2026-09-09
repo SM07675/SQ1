@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import type { AnalysisRunRecord } from "../types";
-import { artifactUrl } from "../api";
+import { artifactUrl, downloadPdfReport } from "../api";
 
 interface ArchiveViewProps {
   runs: AnalysisRunRecord[];
@@ -338,14 +338,14 @@ export const ArchiveView: React.FC<ArchiveViewProps> = ({
                   )}
 
                   {reportUrl && (
-                    <a
-                      href={reportUrl}
-                      download={`GeoProof_Report_${run.result_id.slice(0, 8)}.pdf`}
+                    <button
+                      type="button"
+                      onClick={() => downloadPdfReport(run.result_id, `GeoProof_Report_${run.result_id.slice(0, 8)}.pdf`)}
                       className="action-btn-download"
-                      title="Download PDF audit report"
+                      title="Download publication-grade GeoProof PDF report"
                     >
                       <span>⇩ Download</span>
-                    </a>
+                    </button>
                   )}
                 </div>
               </article>

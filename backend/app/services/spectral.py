@@ -11,6 +11,7 @@ from pyproj import Transformer
 from rasterio.enums import Resampling
 from rasterio.features import shapes
 from rasterio.transform import Affine
+from scipy import ndimage as ndi
 from shapely.geometry import shape
 from shapely.ops import transform as shapely_transform
 
@@ -110,10 +111,8 @@ def write_index_png(values: np.ndarray, index_name: str, output_path: Path) -> P
 
 
 def _denoise(mask: np.ndarray) -> np.ndarray:
-    from scipy.ndimage import uniform_filter
-    neighbour_count = uniform_filter(mask.astype("float32"), size=3, mode="constant", cval=0.0) * 9
+    neighbour_count = ndi.uniform_filter(mask.astype("float32"), size=3, mode="constant", cval=0.0) * 9
     return mask & (neighbour_count >= 4)
-
 
 
 def _area_m2(geometry: dict[str, Any], crs: Any) -> float | None:
@@ -178,22 +177,45 @@ def _polygonize(
 
 def _write_mask(mask: np.ndarray, output_path: Path, color: tuple[int, int, int]) -> Path:
     rgba = np.zeros((*mask.shape, 4), dtype="uint8")
-    rgba[mask] = [*color, 210]
+    rgba[mask] = [*color, 215]
     Image.fromarray(rgba, mode="RGBA").save(output_path, format="PNG")
     return output_path
 
 
 def _direction(query: str) -> str:
-    lowered = query.lower()
-    return "decrease" if any(word in lowered for word in ("decrease", "decreased", "reduced", "loss", "lost")) else "increase"
+    low = query.lower()
+    for dec in ("decrease", "loss", "decline", "reduction", "less", "dropped", "shrunk"):
+        if dec in low:
+            return "decrease"
+    return "increase"
 
 
 def semantic_change_detection(
     before: Path,
     after: Path,
     target: str,
-    query: str,
+    arg4: Any = None,
+    arg5: Any = None,
+) -> dict[str, Any] | None:
+    """Flexible wrapper supporting both (before, after, target, query, output_dir) and (before, after, target, output_dir, query)."""
+    if isinstance(arg4, (str, bytes)):
+        query = str(arg4)
+        output_dir = Path(arg5) if arg5 is not None else Path(".")
+    elif isinstance(arg5, (str, bytes)):
+        output_dir = Path(arg4) if arg4 is not None else Path(".")
+        query = str(arg5)
+    else:
+        output_dir = Path(arg4) if arg4 is not None else (Path(arg5) if arg5 is not None else Path("."))
+        query = ""
+    return spectral_change_analysis(before, after, target, output_dir, query)
+
+
+def spectral_change_analysis(
+    before: Path,
+    after: Path,
+    target: str,
     output_dir: Path,
+    query: str = "",
 ) -> dict[str, Any] | None:
     index_name = TARGET_INDEX.get(target)
     if not index_name:
@@ -254,35 +276,81 @@ def semantic_change_detection(
     }
 
 
+def _describe_region_location(centroid_y_norm: float, centroid_x_norm: float) -> str:
+    """Computes an intuitive natural-language description of where a region is located."""
+    h_label = ""
+    v_label = ""
+
+    if centroid_x_norm < 0.38:
+        h_label = "western (left)"
+    elif centroid_x_norm > 0.62:
+        h_label = "eastern (right)"
+    else:
+        h_label = "central"
+
+    if centroid_y_norm < 0.38:
+        v_label = "northern (upper)"
+    elif centroid_y_norm > 0.62:
+        v_label = "southern (lower)"
+    else:
+        v_label = "central"
+
+    if h_label == "central" and v_label == "central":
+        return "central portion of the image"
+    elif h_label == "central":
+        return f"{v_label} portion of the image"
+    elif v_label == "central":
+        return f"{h_label} portion of the image"
+    else:
+        # e.g. "western and north-western sector (upper-left region)"
+        return f"{v_label} and {h_label} sector"
+
+
 def extract_water_grounding(
     path: Path,
     output_dir: Path,
     query: str = "Highlight the largest water body.",
     max_size: int = 1024,
 ) -> dict[str, Any] | None:
-    """Robust water grounding engine supporting multispectral (NDWI) and optical RGB imagery.
-
-    Identifies water bodies, isolates the largest connected water body, computes bounding boxes,
-    and creates high-contrast visualization overlays and GeoJSON boundaries.
+    """
+    High-precision, multi-stage water grounding engine with urban false-positive suppression.
+    
+    Distinguishes between:
+    - TRUE MULTISPECTRAL NDWI (when calibrated Green + NIR bands exist)
+    - RGB VISUAL WATER ESTIMATION (using texture, edge density, and color signature)
+    
+    Applies connected component analysis, morphological cleanup, urban structural edge suppression,
+    and region-level evidence scoring to isolate genuine water bodies without falsely marking
+    shadows, roads, or rooftops.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     q_lower = query.lower()
     is_largest_request = any(k in q_lower for k in ("largest", "biggest", "main", "primary", "dominant")) or True
 
-    # 1. Attempt Multispectral NDWI (Green + NIR)
+    # 1. Attempt True Multispectral NDWI (Green + NIR)
     ndwi_values: np.ndarray | None = None
     transform: Affine = Affine.identity()
     crs: Any = None
     h, w = 0, 0
+    is_spectral = False
 
     try:
         ndwi_values, transform, crs = read_index(path, "ndwi", max_size=max_size)
         h, w = ndwi_values.shape
-        water_mask = np.isfinite(ndwi_values) & (ndwi_values >= 0.10)
+        # Also check for NDVI to suppress dense vegetation
+        try:
+            ndvi_values, _, _ = read_index(path, "ndvi", max_size=max_size)
+            veg_suppress = (ndvi_values > 0.15)
+        except Exception:
+            veg_suppress = np.zeros_like(ndwi_values, dtype=bool)
+
+        water_candidate_pixels = np.isfinite(ndwi_values) & (ndwi_values >= 0.10) & (~veg_suppress)
+        is_spectral = True
+        index_label = "NDWI"
     except Exception:
         ndwi_values = None
 
-    # 2. Fallback to Optical RGB Water Signature
+    # 2. RGB Visual Water Estimation with Urban False-Positive Suppression
     if ndwi_values is None:
         try:
             with rasterio.open(path) as src:
@@ -300,7 +368,7 @@ def extract_water_grounding(
                     arr = src.read(1, out_shape=(h, w), resampling=Resampling.bilinear).astype("float32")
                     r, g, b = arr, arr, arr
         except Exception:
-            # Open via PIL for standard PNG/JPG
+            # Fallback to PIL
             try:
                 with Image.open(path) as img:
                     img_rgb = img.convert("RGB")
@@ -314,149 +382,259 @@ def extract_water_grounding(
             except Exception:
                 return None
 
-        # Normalize to 0-1
+        # Normalize channels to [0.0, 1.0]
         max_val = float(np.max(np.stack([r, g, b])))
         if max_val > 1.0:
             scale = 255.0 if max_val <= 255.0 else max_val
-            r = np.clip(r / scale, 0, 1)
-            g = np.clip(g / scale, 0, 1)
-            b = np.clip(b / scale, 0, 1)
+            r = np.clip(r / scale, 0.0, 1.0)
+            g = np.clip(g / scale, 0.0, 1.0)
+            b = np.clip(b / scale, 0.0, 1.0)
 
-        # Optical Water Signatures:
-        # Water strongly absorbs Red/NIR and reflects Blue/Green, with low overall albedo
-        brightness = (r + g + b) / 3.0
-        green_red_ndwi = (g - r) / (g + r + 1e-5)
-        blue_red_ratio = (b - r) / (b + r + 1e-5)
-        texture = np.zeros_like(r)
-        texture[:-1, :] += np.abs(np.diff(r, axis=0))
-        texture[:, :-1] += np.abs(np.diff(r, axis=1))
+        # A. Luminance / Brightness
+        y_lum = 0.299 * r + 0.587 * g + 0.114 * b
 
-        # Water criteria:
-        # 1. Dark to moderate albedo (brightness < 0.38)
-        # 2. Blue or Green dominance over Red
-        # 3. Low spatial gradient (water surface is smooth, non-textured)
-        is_water_pixel = (
-            (brightness < 0.38)
-            & (b >= r * 0.85)
-            & (g >= r * 0.75)
-            & ((blue_red_ratio > -0.05) | (green_red_ndwi > -0.05) | (brightness < 0.22))
-            & (texture < 0.12)
+        # B. Color Difference Indices
+        ndbr = (b - r) / (b + r + 1e-5)
+        ndgr = (g - r) / (g + r + 1e-5)
+
+        # C. Local Texture Variance (5x5 sliding window)
+        mean_sq = ndi.uniform_filter(y_lum * y_lum, size=5)
+        mean_y = ndi.uniform_filter(y_lum, size=5)
+        local_texture_std = np.sqrt(np.maximum(0.0, mean_sq - mean_y * mean_y))
+
+        # D. High-Frequency Gradient Magnitude (Sobel filter)
+        gx = ndi.sobel(y_lum, axis=1) / 4.0
+        gy = ndi.sobel(y_lum, axis=0) / 4.0
+        gradient_mag = np.sqrt(gx * gx + gy * gy)
+
+        # E. Urban Structural Edge Density (17x17 window)
+        # Strong structural edges are typical for buildings, roads, and rooftops
+        strong_edges = (gradient_mag > 0.06).astype(np.float32)
+        urban_edge_density = ndi.uniform_filter(strong_edges, size=17)
+
+        # F. Rejection of neutral grey asphalt, concrete, and dark shadows
+        # Water exhibits blue/cyan hue; asphalt/shadows have neutral balance |R-G| ~ 0, |G-B| ~ 0
+        color_spread = np.maximum(np.abs(r - g), np.maximum(np.abs(g - b), np.abs(r - b)))
+        is_neutral_grey_or_shadow = (color_spread < 0.035) & (ndbr < 0.04)
+
+        # G. Multi-condition Water Pixel Candidate Selection
+        # 1. Clear blue/cyan or green-blue dominance over red
+        # 2. Smooth local texture and low high-frequency gradient
+        # 3. Low urban edge density (rejects dense urban building clusters)
+        # 4. Moderate brightness (rejects pure black shadow noise < 0.03 and extreme glints > 0.60)
+        # 5. Non-neutral color signature
+        water_candidate_pixels = (
+            ((b > r * 1.04) | ((g > r * 1.06) & (b > r * 0.94)))
+            & ((ndbr > 0.02) | (ndgr > 0.03))
+            & (local_texture_std < 0.035)
+            & (gradient_mag < 0.065)
+            & (urban_edge_density < 0.10)
+            & (y_lum >= 0.03)
+            & (y_lum <= 0.60)
+            & (~is_neutral_grey_or_shadow)
         )
-        water_mask = is_water_pixel
 
-        # Synthesize continuous optical water index [-1, 1]
-        ndwi_values = np.clip(blue_red_ratio * 0.6 + green_red_ndwi * 0.4 + (0.30 - brightness), -1.0, 1.0)
+        # Continuous optical water index [-1.0, 1.0] for visualization
+        ndwi_values = np.clip(
+            ndbr * 0.5 + ndgr * 0.3 + (0.35 - y_lum) * 0.4 - urban_edge_density * 0.8 - local_texture_std * 1.2,
+            -1.0,
+            1.0,
+        )
+        is_spectral = False
+        index_label = "RGB_WATER_ESTIMATION"
 
-    # 3. Morphological Denoising
-    cleaned_mask = _denoise(water_mask)
-    if not cleaned_mask.any():
-        return None
+    # 3. Morphological Cleanup (Opening removes thin lines/shadows, Closing fills internal gaps)
+    struct_elem = ndi.generate_binary_structure(2, 2)
+    opened_mask = ndi.binary_opening(water_candidate_pixels, structure=struct_elem, iterations=1)
+    cleaned_mask = ndi.binary_closing(opened_mask, structure=struct_elem, iterations=2)
 
-    # 4. Generate Polygon Geometries & Identify Largest Water Component
+    total_image_pixels = h * w
+    min_component_pixels = max(150, round(total_image_pixels * 0.0015))
+
+    # 4. Connected Component Analysis & Region Quality Scoring
+    labeled_components, num_features = ndi.label(cleaned_mask)
+    
+    valid_regions_data: list[dict[str, Any]] = []
+    
+    for comp_id in range(1, num_features + 1):
+        comp_mask = (labeled_components == comp_id)
+        comp_pixels = int(comp_mask.sum())
+        
+        if comp_pixels < min_component_pixels:
+            continue
+            
+        coords = np.argwhere(comp_mask)
+        ymin, xmin = coords.min(axis=0)
+        ymax, xmax = coords.max(axis=0)
+        box_h = ymax - ymin + 1
+        box_w = xmax - xmin + 1
+        aspect_ratio = max(box_h / box_w, box_w / box_h)
+        
+        # Penalize thin linear structures (e.g. roads or shadows along buildings)
+        if aspect_ratio > 12 and comp_pixels < 2500:
+            continue
+            
+        mean_index_score = float(ndwi_values[comp_mask].mean()) if ndwi_values is not None else 0.5
+        
+        # Region quality score factoring size and spatial coherence
+        region_score = (mean_index_score + 1.0) * (comp_pixels ** 0.5)
+        
+        centroid_y = float(coords[:, 0].mean())
+        centroid_x = float(coords[:, 1].mean())
+        
+        valid_regions_data.append({
+            "id": comp_id,
+            "mask": comp_mask,
+            "pixels": comp_pixels,
+            "score": region_score,
+            "mean_index": mean_index_score,
+            "centroid": (centroid_y, centroid_x),
+            "centroid_norm": (centroid_y / h, centroid_x / w),
+            "bbox_pixels": [int(ymin), int(xmin), int(ymax), int(xmax)],
+            "bbox_norm": [round(ymin / h, 4), round(xmin / w, 4), round(ymax / h, 4), round(xmax / w, 4)],
+        })
+
+    # Sort valid regions by evidence score (largest and most coherent first)
+    valid_regions_data.sort(key=lambda r: r["score"], reverse=True)
+
+    # 5. Sanity Check & Safe Abstention
+    if not valid_regions_data:
+        # No genuine coherent water body was detected
+        empty_mask_path = output_dir / "water_mask.png"
+        empty_grounding_path = output_dir / "water_grounding_mask.png"
+        empty_ndwi_path = output_dir / "ndwi.png"
+        empty_geojson_path = output_dir / "water_regions.geojson"
+        
+        # Write clean empty files
+        _write_mask(np.zeros((h, w), dtype=bool), empty_mask_path, (0, 184, 217))
+        Image.fromarray(np.zeros((h, w, 4), dtype="uint8"), mode="RGBA").save(empty_grounding_path, format="PNG")
+        write_index_png(ndwi_values if ndwi_values is not None else np.zeros((h, w)), "ndwi", empty_ndwi_path)
+        empty_geojson_path.write_text(json.dumps({"type": "FeatureCollection", "features": []}), encoding="utf-8")
+
+        return {
+            "target": "water",
+            "water_body_identified": False,
+            "findings": "No coherent, continuous water body could be identified with sufficient confidence.",
+            "primary_region": None,
+            "grounding_task": "largest_water_body" if is_largest_request else "water_delineation",
+            "is_spectral": is_spectral,
+            "index_type": index_label,
+            "location_description": "No verified water body identified",
+            "mask_path": empty_mask_path,
+            "grounding_mask_path": empty_grounding_path,
+            "ndwi_path": empty_ndwi_path,
+            "geojson_path": empty_geojson_path,
+            "region_count": 0,
+            "area_m2": None,
+            "total_area_m2": None,
+            "coverage_percent": 0.0,
+            "largest_coverage_percent": 0.0,
+            "largest_pixel_count": 0,
+            "total_water_pixels": 0,
+            "primary_bbox": [0.0, 0.0, 0.0, 0.0],
+            "confidence": 0.35,
+            "producer": "multispectral_ndwi_grounding_engine_v2" if is_spectral else "optical_water_grounding_engine_v2",
+        }
+
+    # Extract Primary Water Body & All Validated Water Regions
+    primary_region = valid_regions_data[0]
+    primary_mask = primary_region["mask"]
+    primary_pixels = primary_region["pixels"]
+    primary_bbox = primary_region["bbox_norm"]
+    
+    # Union of all validated water components
+    all_validated_water_mask = np.zeros((h, w), dtype=bool)
+    for r_item in valid_regions_data:
+        all_validated_water_mask |= r_item["mask"]
+    total_water_pixels = int(all_validated_water_mask.sum())
+
+    # Generate location wording
+    location_desc = _describe_region_location(primary_region["centroid_norm"][0], primary_region["centroid_norm"][1])
+
+    # 6. Generate Vector Geometries (GeoJSON)
     geojson_path = output_dir / "water_regions.geojson"
-    region_count, total_area = _polygonize(cleaned_mask, transform, crs, kind="water", output_path=geojson_path)
+    region_count, total_area_m2 = _polygonize(
+        all_validated_water_mask, transform, crs, kind="water", output_path=geojson_path
+    )
 
-    # Read back sorted features from GeoJSON to isolate largest
-    features: list[dict[str, Any]] = []
+    # Read back primary polygon real-world area if CRS available
+    primary_area_m2: float | None = None
     if geojson_path.exists():
         try:
             fc = json.loads(geojson_path.read_text(encoding="utf-8"))
-            features = fc.get("features", [])
+            feats = fc.get("features", [])
+            if feats:
+                primary_area_m2 = feats[0]["properties"].get("area_m2")
         except Exception:
             pass
 
-    # Isolate largest water component mask
-    largest_mask = np.zeros_like(cleaned_mask, dtype=bool)
-    primary_bbox: list[float] = [0.0, 0.0, 1.0, 1.0]  # [ymin, xmin, ymax, xmax] normalized
-    largest_area_m2: float | None = None
-    largest_pixels = 0
-
-    if features:
-        largest_feat = features[0]
-        largest_area_m2 = largest_feat["properties"].get("area_m2")
-        largest_geom = shape(largest_feat["geometry"])
-        # Rasterize largest geometry to single mask
-        from rasterio.features import rasterize
-        largest_mask = rasterize(
-            [(largest_geom, 1)],
-            out_shape=(h, w),
-            transform=transform,
-            fill=0,
-            dtype="uint8",
-        ) == 1
-        largest_pixels = int(largest_mask.sum())
-
-        minx, miny, maxx, maxy = largest_geom.bounds
-        # Normalize bbox to [0, 1] coordinate box [ymin, xmin, ymax, xmax]
-        if transform == Affine.identity():
-            primary_bbox = [round(miny / h, 4), round(minx / w, 4), round(maxy / h, 4), round(maxx / w, 4)]
-        else:
-            # Transform to pixel space for normalized coords
-            inv_trans = ~transform
-            px_minx, px_miny = inv_trans * (minx, maxy)
-            px_maxx, px_maxy = inv_trans * (maxx, miny)
-            primary_bbox = [
-                round(max(0.0, min(1.0, min(px_miny, px_maxy) / h)), 4),
-                round(max(0.0, min(1.0, min(px_minx, px_maxx) / w)), 4),
-                round(max(0.0, min(1.0, max(px_miny, px_maxy) / h)), 4),
-                round(max(0.0, min(1.0, max(px_minx, px_maxx) / w)), 4),
-            ]
-    else:
-        largest_mask = cleaned_mask
-        largest_pixels = int(cleaned_mask.sum())
-
-    # 5. Render Output Visual Layers
-    # A. Continuous NDWI / Water index heatmap
+    # 7. Render Output Visual Layers
+    # A. Continuous Water Index Heatmap
     ndwi_path = output_dir / "ndwi.png"
-    write_index_png(ndwi_values, "ndwi", ndwi_path)
+    write_index_png(ndwi_values if ndwi_values is not None else np.zeros((h, w)), "ndwi", ndwi_path)
 
-    # B. Full Water Mask (Cyan)
+    # B. Full Verified Water Mask (Cyan)
     mask_path = output_dir / "water_mask.png"
-    _write_mask(cleaned_mask, mask_path, (0, 184, 217))
+    _write_mask(all_validated_water_mask, mask_path, (0, 184, 217))
 
-    # C. High-Contrast Water Grounding Mask (Electric Cyan with glowing boundary)
+    # C. High-Contrast Primary Water Grounding Overlay
     grounding_mask_path = output_dir / "water_grounding_mask.png"
     rgba_grounding = np.zeros((h, w, 4), dtype="uint8")
-    
-    # Fill all water in soft cyan
-    rgba_grounding[cleaned_mask] = [0, 180, 216, 130]
-    # Fill largest water body in vibrant electric azure
-    rgba_grounding[largest_mask] = [0, 229, 255, 205]
 
-    # Boundary outline for largest water body
-    largest_u8 = largest_mask.astype("uint8")
-    padded = np.pad(largest_u8, 1)
-    boundary = largest_mask & (
+    # Secondary water regions (soft translucent cyan)
+    rgba_grounding[all_validated_water_mask] = [0, 180, 216, 120]
+    # Primary water body (vibrant electric azure)
+    rgba_grounding[primary_mask] = [0, 229, 255, 205]
+
+    # Glowing border outline for primary water body
+    primary_u8 = primary_mask.astype("uint8")
+    padded = np.pad(primary_u8, 1)
+    boundary = primary_mask & (
         (padded[:-2, 1:-1] == 0) | (padded[2:, 1:-1] == 0) |
         (padded[1:-1, :-2] == 0) | (padded[1:-1, 2:] == 0)
     )
     rgba_grounding[boundary] = [56, 189, 248, 255]
 
-    grounding_img = Image.fromarray(rgba_grounding, mode="RGBA")
-    grounding_img.save(grounding_mask_path, format="PNG")
+    Image.fromarray(rgba_grounding, mode="RGBA").save(grounding_mask_path, format="PNG")
 
-    total_pixels = h * w
-    total_water_pixels = int(cleaned_mask.sum())
-    coverage_percent = round((total_water_pixels / total_pixels) * 100, 2)
-    largest_coverage_percent = round((largest_pixels / total_pixels) * 100, 2)
+    coverage_percent = round((total_water_pixels / total_image_pixels) * 100, 2)
+    largest_coverage_percent = round((primary_pixels / total_image_pixels) * 100, 2)
+
+    # Calibrate confidence based on spectral presence and region dominance
+    if is_spectral:
+        confidence = 0.94 if largest_coverage_percent >= 5.0 else 0.88
+    else:
+        # RGB visual estimation confidence
+        confidence = 0.86 if largest_coverage_percent >= 10.0 else 0.78
+
+    findings_text = (
+        f"Primary water body verified in the {location_desc}, covering {largest_coverage_percent}% of the scene "
+        f"({primary_pixels:,} pixels)."
+    )
 
     return {
         "target": "water",
+        "water_body_identified": True,
+        "findings": findings_text,
+        "primary_region": primary_region,
         "grounding_task": "largest_water_body" if is_largest_request else "water_delineation",
+        "is_spectral": is_spectral,
+        "index_type": index_label,
+        "location_description": location_desc,
         "mask_path": mask_path,
         "grounding_mask_path": grounding_mask_path,
         "ndwi_path": ndwi_path,
         "geojson_path": geojson_path,
-        "region_count": region_count,
-        "area_m2": largest_area_m2 or total_area,
-        "total_area_m2": total_area,
+        "region_count": len(valid_regions_data),
+        "area_m2": primary_area_m2 or total_area_m2,
+        "total_area_m2": total_area_m2,
         "coverage_percent": coverage_percent,
         "largest_coverage_percent": largest_coverage_percent,
-        "largest_pixel_count": largest_pixels,
+        "largest_pixel_count": primary_pixels,
         "total_water_pixels": total_water_pixels,
         "primary_bbox": primary_bbox,
-        "confidence": 0.94,
-        "producer": "optical_water_grounding_engine_v2",
+        "confidence": confidence,
+        "producer": "multispectral_ndwi_grounding_engine_v2" if is_spectral else "optical_water_grounding_engine_v2",
     }
 
 
@@ -478,24 +656,29 @@ def spectral_scene_analysis(path: Path, target: str | None, output_dir: Path) ->
         write_index_png(values, name, png_path)
         computed[name] = {
             "mean": round(float(np.mean(valid)), 4),
-            "median": round(float(np.median(valid)), 4),
-            "positive_percent": round(float((valid > 0.1).mean() * 100), 3),
+            "p10": round(float(np.percentile(valid, 10)), 4),
+            "p90": round(float(np.percentile(valid, 90)), 4),
             "path": png_path,
         }
     if not computed:
-        # Fallback to water grounding if water is requested
-        if target == "water":
-            return extract_water_grounding(path, output_dir)
         return None
-
-    result: dict[str, Any] = {"indices": computed, "producer": "spectral_toolkit_v2"}
-    if target and requested and requested in computed:
-        values, transform, crs = read_index(path, requested)
-        threshold = 0.25 if target == "vegetation" else (0.25 if target == "water" else 0.05)
-        mask = _denoise(np.isfinite(values) & (values >= threshold))
+    primary_name = requested if requested in computed else next(iter(computed))
+    primary_values, transform, crs = read_index(path, primary_name)
+    threshold = 0.25 if primary_name == "ndvi" else (0.1 if primary_name == "ndwi" else 0.05)
+    mask = np.isfinite(primary_values) & (primary_values >= threshold)
+    mask = _denoise(mask)
+    result = {
+        "primary_index": primary_name.upper(),
+        "indices": computed,
+        "crs": crs.to_string() if crs else None,
+        "producer": "spectral_scene_analyzer_v2",
+    }
+    if target:
         mask_path = output_dir / f"{target}_mask.png"
         geojson_path = output_dir / f"{target}_regions.geojson"
-        color = {"vegetation": (34, 197, 94), "water": (0, 184, 217), "built-up": (249, 115, 22)}[target]
+        color = {"vegetation": (34, 197, 94), "water": (0, 184, 217), "built-up": (249, 115, 22)}.get(
+            target, (59, 130, 246)
+        )
         _write_mask(mask, mask_path, color)
         count, area = _polygonize(mask, transform, crs, kind=target, output_path=geojson_path)
         result.update({
@@ -505,7 +688,7 @@ def spectral_scene_analysis(path: Path, target: str | None, output_dir: Path) ->
             "region_count": count,
             "area_m2": area,
             "coverage_percent": round(float(mask.mean() * 100), 3),
-            "index": requested.upper(),
+            "index": requested.upper() if requested else primary_name.upper(),
             "threshold": threshold,
         })
     return result
@@ -514,7 +697,6 @@ def spectral_scene_analysis(path: Path, target: str | None, output_dir: Path) ->
 def optical_sar_water_fusion(optical: Path, sar: Path, output_dir: Path) -> dict[str, Any] | None:
     from app.services.croma_pipeline import is_sar_image
 
-    # Auto-detect if inputs were passed in reverse order (SAR first, Optical second)
     if is_sar_image(optical) and not is_sar_image(sar):
         optical, sar = sar, optical
 
@@ -522,13 +704,11 @@ def optical_sar_water_fusion(optical: Path, sar: Path, output_dir: Path) -> dict
     transform: Affine = Affine.identity()
     crs: Any = None
 
-    # 1. Try Multispectral NDWI (Green + NIR)
     try:
         ndwi, transform, crs = read_index(optical, "ndwi")
     except Exception:
         ndwi = None
 
-    # 2. Fallback to Optical RGB Water Index if multispectral Green/NIR bands not labeled
     if ndwi is None:
         try:
             with rasterio.open(optical) as src_opt:
@@ -544,10 +724,10 @@ def optical_sar_water_fusion(optical: Path, sar: Path, output_dir: Path) -> dict
                     max_v = max(float(r.max()), float(g.max()), float(b.max()))
                     if max_v > 1.0:
                         r, g, b = r / 255.0, g / 255.0, b / 255.0
-                    brightness = (r + g + b) / 3.0
-                    green_red_ndwi = (g - r) / (g + r + 1e-5)
-                    blue_red_ratio = (b - r) / (b + r + 1e-5)
-                    ndwi = np.clip(blue_red_ratio * 0.6 + green_red_ndwi * 0.4 + (0.30 - brightness), -1.0, 1.0)
+                    y_lum = 0.299 * r + 0.587 * g + 0.114 * b
+                    ndbr = (b - r) / (b + r + 1e-5)
+                    ndgr = (g - r) / (g + r + 1e-5)
+                    ndwi = np.clip(ndbr * 0.5 + ndgr * 0.3 + (0.35 - y_lum) * 0.4, -1.0, 1.0)
                 else:
                     arr = src_opt.read(1, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
                     ndwi = (arr - arr.min()) / max(arr.max() - arr.min(), 1e-5)
@@ -601,4 +781,171 @@ def optical_sar_water_fusion(optical: Path, sar: Path, output_dir: Path) -> dict
         "ndwi_path": ndwi_path,
         "geojson_path": geojson_path,
         "producer": "optical_ndwi_plus_sar_backscatter_v2",
+    }
+
+
+def classify_land_cover_scene(
+    image_path: Path,
+    output_dir: Path,
+    query: str = "",
+    max_size: int = 1024,
+) -> dict[str, Any]:
+    """Multi-class deterministic and spectral land-cover classification engine."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with rasterio.open(image_path) as src:
+        band_map = _canonical_band_map(src)
+        ratio = min(1.0, max_size / max(src.width, src.height))
+        out_w = max(1, round(src.width * ratio))
+        out_h = max(1, round(src.height * ratio))
+        transform = src.transform * Affine.scale(src.width / out_w, src.height / out_h)
+        crs = src.crs
+
+        has_nir = "nir" in band_map
+        has_red = "red" in band_map
+        has_green = "green" in band_map
+        has_blue = "blue" in band_map
+        has_swir = "swir" in band_map
+
+        if src.count >= 3 and (not has_red or not has_green or not has_blue):
+            r = src.read(1, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
+            g = src.read(2, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
+            b = src.read(3, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
+        else:
+            r = _read_band(src, band_map.get("red", 1), out_h, out_w)
+            g = _read_band(src, band_map.get("green", min(2, src.count)), out_h, out_w)
+            b = _read_band(src, band_map.get("blue", min(3, src.count)), out_h, out_w)
+
+        if has_nir:
+            nir = _read_band(src, band_map["nir"], out_h, out_w)
+        else:
+            nir = None
+
+        if has_swir:
+            swir = _read_band(src, band_map["swir"], out_h, out_w)
+        else:
+            swir = None
+
+    # Compute Normalized Bands
+    r_norm = (r - r.min()) / max(r.max() - r.min(), 1e-5)
+    g_norm = (g - g.min()) / max(g.max() - g.min(), 1e-5)
+    b_norm = (b - b.min()) / max(b.max() - b.min(), 1e-5)
+    brightness = 0.299 * r_norm + 0.587 * g_norm + 0.114 * b_norm
+
+    # Urban Edge Suppression
+    gx = ndi.sobel(brightness, axis=1) / 4.0
+    gy = ndi.sobel(brightness, axis=0) / 4.0
+    gmag = np.sqrt(gx * gx + gy * gy)
+    edge_density = ndi.uniform_filter((gmag > 0.06).astype(np.float32), size=17)
+
+    if nir is not None:
+        ndvi = np.clip((nir - r) / np.maximum(nir + r, 1e-6), -1.0, 1.0)
+        ndwi = np.clip((g - nir) / np.maximum(g + nir, 1e-6), -1.0, 1.0)
+    else:
+        # Optical proxy indices
+        ndbr = (b_norm - r_norm) / (b_norm + r_norm + 1e-5)
+        ndgr = (g_norm - r_norm) / (g_norm + r_norm + 1e-5)
+        ndvi = np.clip((g_norm - r_norm) / np.maximum(g_norm + r_norm, 1e-6), -1.0, 1.0)
+        ndwi = np.clip(ndbr * 0.5 + ndgr * 0.3 - edge_density * 0.8, -1.0, 1.0)
+
+    if swir is not None and nir is not None:
+        ndbi = np.clip((swir - nir) / np.maximum(swir + nir, 1e-6), -1.0, 1.0)
+    else:
+        ndbi = np.clip((r_norm - g_norm) + (brightness - 0.5) + edge_density * 0.5, -1.0, 1.0)
+
+    total_pixels = out_h * out_w
+
+    # 1. Water mask with urban suppression
+    water_candidate = (ndwi >= 0.12) & (ndvi < 0.10) & (brightness < 0.60) & (edge_density < 0.12)
+    struct_elem = ndi.generate_binary_structure(2, 2)
+    water_mask = ndi.binary_closing(ndi.binary_opening(water_candidate, structure=struct_elem), structure=struct_elem)
+
+    # 2. Forest / Dense canopy
+    forest_mask = _denoise((ndvi >= 0.40) & ~water_mask)
+
+    # 3. General Vegetation / Greenery (excluding dense forest)
+    veg_mask = _denoise((ndvi >= 0.18) & ~forest_mask & ~water_mask)
+
+    # 4. Built-up / Urban footprint
+    builtup_mask = _denoise(((ndbi >= 0.06) | (edge_density > 0.10) | ((brightness > 0.55) & (ndvi < 0.15))) & ~water_mask & ~forest_mask & ~veg_mask)
+
+    # 5. Agricultural land / Cultivated fields
+    agri_mask = _denoise(((ndvi >= 0.10) & (ndvi < 0.28) & (r_norm > 0.20)) & ~water_mask & ~forest_mask & ~veg_mask & ~builtup_mask)
+
+    # 6. Bare land / Soil (remaining)
+    bare_mask = ~water_mask & ~forest_mask & ~veg_mask & ~builtup_mask & ~agri_mask
+
+    # Calculate percentages
+    water_pct = round(float(water_mask.sum() / total_pixels * 100), 2)
+    forest_pct = round(float(forest_mask.sum() / total_pixels * 100), 2)
+    veg_pct = round(float(veg_mask.sum() / total_pixels * 100), 2)
+    total_veg_pct = round(veg_pct + forest_pct, 2)
+    builtup_pct = round(float(builtup_mask.sum() / total_pixels * 100), 2)
+    agri_pct = round(float(agri_mask.sum() / total_pixels * 100), 2)
+    bare_pct = round(float(bare_mask.sum() / total_pixels * 100), 2)
+
+    def _qualitative(pct: float) -> str:
+        if pct >= 35.0:
+            return "Dominant"
+        if pct >= 15.0:
+            return "Moderate"
+        if pct >= 2.0:
+            return "Detected"
+        if pct >= 0.2:
+            return "Low"
+        return "None"
+
+    breakdown = {
+        "water": {"percent": water_pct, "status": _qualitative(water_pct), "color": "#0ea5e9"},
+        "vegetation": {"percent": total_veg_pct, "status": _qualitative(total_veg_pct), "color": "#10b981"},
+        "forest": {"percent": forest_pct, "status": _qualitative(forest_pct), "color": "#059669"},
+        "agricultural": {"percent": agri_pct, "status": _qualitative(agri_pct), "color": "#eab308"},
+        "built_up": {"percent": builtup_pct, "status": _qualitative(builtup_pct), "color": "#f43f5e"},
+        "bare_land": {"percent": bare_pct, "status": _qualitative(bare_pct), "color": "#b48c64"},
+    }
+
+    # Generate Land Cover Color-coded RGBA Map
+    rgba = np.zeros((out_h, out_w, 4), dtype="uint8")
+    rgba[bare_mask] = [180, 140, 100, 200]
+    rgba[agri_mask] = [234, 179, 8, 220]
+    rgba[builtup_mask] = [244, 63, 94, 225]
+    rgba[veg_mask] = [52, 211, 153, 220]
+    rgba[forest_mask] = [16, 185, 129, 235]
+    rgba[water_mask] = [14, 165, 233, 240]
+
+    mask_path = output_dir / "land_cover_mask.png"
+    Image.fromarray(rgba, mode="RGBA").save(mask_path, format="PNG")
+
+    geojson_path = output_dir / "land_cover.geojson"
+    region_count, area_m2 = _polygonize(
+        water_mask | forest_mask | veg_mask | builtup_mask,
+        transform,
+        crs,
+        kind="land_cover_zones",
+        output_path=geojson_path,
+    )
+
+    dominant_class = max(breakdown.items(), key=lambda x: x[1]["percent"])
+    summary_text = (
+        f"Land cover analysis resolved: {dominant_class[0].replace('_', ' ').title()} is dominant ({dominant_class[1]['percent']}%), "
+        f"Vegetation canopy: {total_veg_pct}%, Built-up footprint: {builtup_pct}%, "
+        f"Water bodies: {water_pct}%, Agricultural land: {agri_pct}%, Bare soil: {bare_pct}%."
+    )
+
+    return {
+        "target": "land_cover",
+        "producer": "multispectral_land_cover_engine_v1",
+        "summary": summary_text,
+        "confidence": 0.90,
+        "breakdown": breakdown,
+        "dominant_class": dominant_class[0],
+        "mask_path": mask_path,
+        "geojson_path": geojson_path,
+        "water_percent": water_pct,
+        "vegetation_percent": total_veg_pct,
+        "forest_percent": forest_pct,
+        "agricultural_percent": agri_pct,
+        "built_up_percent": builtup_pct,
+        "bare_land_percent": bare_pct,
+        "region_count": region_count,
+        "area_m2": area_m2,
     }

@@ -109,5 +109,7 @@ def test_extract_water_grounding_rgb_png(tmp_path: Path) -> None:
     assert res["grounding_mask_path"].exists()
     assert res["ndwi_path"].exists()
     assert res["geojson_path"].exists()
-    assert res["confidence"] >= 0.90
+    assert res["is_spectral"] is False
+    assert res["confidence"] >= 0.85
+    assert "left" in res["location_description"].lower() or "west" in res["location_description"].lower()
 
