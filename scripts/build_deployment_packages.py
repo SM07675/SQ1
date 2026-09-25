@@ -47,7 +47,7 @@ def main() -> None:
     SPACE.mkdir(parents=True)
     WEB.mkdir()
 
-    for name in ("Dockerfile", "README.md", ".dockerignore", ".gitattributes"):
+    for name in ("app.py", "requirements.txt", "packages.txt", "README.md", ".gitattributes"):
         shutil.copy2(ROOT / "infra" / "huggingface" / name, SPACE / name)
     shutil.copy2(ROOT / "backend" / "pyproject.toml", SPACE / "pyproject.toml")
     copy_directory(ROOT / "backend" / "app", SPACE / "app")
