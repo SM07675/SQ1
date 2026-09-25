@@ -111,8 +111,11 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
         <div className="drop-placeholder">
           <span className="upload-arrow">⇪</span>
           <p>
-            Drop GeoTIFF / PNG / NetCDF or <u>browse</u>
+            Drop imagery or <u>browse</u>
           </p>
+          <small style={{ display: "block", marginTop: "4px", color: "#94a3b8", fontSize: "0.75rem" }}>
+            Supported imagery: PNG • JPG • JPEG • TIFF • GeoTIFF
+          </small>
         </div>
       )}
     </div>

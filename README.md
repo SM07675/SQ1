@@ -1,3 +1,14 @@
+---
+title: SatQuery GeoProof API
+emoji: 🛰️
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+suggested_hardware: cpu-upgrade
+short_description: Evidence-first remote sensing assistant for satellite & aerial imagery analysis
+---
+
 # SatQuery GeoProof v1.0 - SIH26167 Functional Prototype
 
 [![SIH](https://img.shields.io/badge/SIH-26167-blue)]()
@@ -9,8 +20,10 @@
 > **Evidence-first remote sensing assistant for ISRO Smart India Hackathon (SIH26167)**.
 > Ingests satellite imagery (GeoTIFF/NetCDF/Optical/SAR) and natural-language queries, autonomously routes them to specialized analytical engines and vision models, produces verifiable multi-layer visual/vector evidence, and applies a multi-witness arbitration protocol with calibrated uncertainty estimation.
 
-### 📚 Technical Documentation
+### 📚 Technical Documentation & Deployment
+- **[Deployment Guide (Hugging Face + Vercel)](DEPLOYMENT.md)** — Step-by-step instructions for deploying backend on Hugging Face Spaces and frontend on Vercel.
 - **[System Architecture (End-to-End)](ARCHITECTURE.md)** — Detailed technical architecture, pipeline data flows, tech stack matrix, and guardrail arbitration.
+
 - **[Models & Algorithms](MODELS_USED_IN_ANALYSIS.md)** — Deep learning models (RemoteCLIP, TinyCD, Open-CD, CROMA, EarthDial) and physical spectral engines.
 - **[Validation & Benchmarks](VALIDATION.md)** — Test results, accuracy metrics, and Platt-scaled confidence calibration.
 
@@ -81,15 +94,21 @@ the raster affine transform, area, evidence record and PDF report.
   result-retrieval APIs.
 - Quantitative confidence breakdown using input quality, alignment, evidence
   strength, ensemble agreement and optional token log probabilities.
-- Pytest suite and Docker Compose stack.
+- Pytest suite and separate Hugging Face/Vercel deployment packages.
 
-## Important truth about this ZIP
+## Current integrated local analysis
 
-Large model weights and datasets are not included. Learned open-ended VQA,
-learned change detection and CROMA representation fusion require their model
-checkpoints to be downloaded and exposed through the documented adapter
-endpoints. The built-in spectral and sensor-agreement tools remain available,
-but are labelled as deterministic proxies rather than trained-model outputs.
+Single-image optical water, land-cover, and building requests use the imported surface pipeline described in [docs/integrated-model-pipeline.md](docs/integrated-model-pipeline.md). SAR, change, vegetation, scene description, and other requests retain this project's original routes and UI. Local checkpoints are read from this project's `models/` folder; the original non-surface routes retain their existing optional service configuration. Results report the evidence and limitations of the method actually used.
+
+For compatible aerial RGB, water polygons now require agreement between two local segmentation models, reducing grass and pavement false positives. Land-cover results use a task-specific multicolor overlay, with distinct colors for confident bare/pervious ground and unclassified surface. RGB-only results remain estimates; inspect the limitations and source imagery before treating a boundary or area as verified.
+
+## Historical ZIP note
+
+This older section described the original ZIP before local checkpoints were
+added. Primary surface-model weights are now in `models/`. Optional learned
+open-ended VQA, CROMA fusion, and several change models still require validated
+checkpoints and runtime services. Spectral and RGB proxy results remain labelled
+as measurements or proxies rather than trained-model detections.
 
 ## Fast local setup
 
@@ -191,15 +210,12 @@ npm install
 npm run build
 ```
 
-## Docker setup
+## Deploy
 
-```bash
-docker compose up --build
-```
-
-- Web application: http://localhost:8080
-- API: http://localhost:8000
-- PostGIS: localhost:5432
+The clean upload folders are in `deployment/huggingface-space` and
+`deployment/vercel-frontend`. Follow [the deployment guide](infra/DEPLOY_HF_VERCEL.md).
+The Space package includes the locally executable model checkpoints; optional
+endpoint-only research weights are excluded.
 
 ## Connect real models
 

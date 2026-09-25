@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "source": "sample.tif",
+  "tile_size": 448,
+  "overlap": 64,
+  "total_candidate_tiles": 1,
+  "materialized_tiles": 1,
+  "complete_coverage": true,
+  "selection": "all",
+  "normalization": "per-band percentile 2-98 to uint8",
+  "tiles": [
+    {
+      "tile_id": 0,
+      "candidate_index": 0,
+      "file": "model_tiles\\tile_0000.png",
+      "pixel_window": [
+        0,
+        0,
+        256,
+        256
+      ],
+      "bounds": [
+        0.0,
+        0.0,
+        2560.0,
+        2560.0
+      ],
+      "crs": "EPSG:3857"
+    }
+  ]
+}

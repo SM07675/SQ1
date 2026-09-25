@@ -1,0 +1,5 @@
+{
+  "conversion": "fp16_arithmetic_to_fp32_v1",
+  "source_sha256": "9a28e28403accc06c70a3104aedb31eca50401ed23c8ba4314b26357c25e9043",
+  "sha256": "26896aad9dd91172d2ab26743a2b310759aec2ca62b5e96aaa948101dc3c16e6"
+}

@@ -139,7 +139,7 @@ async def test_matrix_4_clear_visual_change_detected(tmp_path: Path):
     baseline_ev = next(e for e in response.evidence if e.kind == "baseline_change_detection")
     assert baseline_ev.metrics["changed_percent"] > 1.0
     assert baseline_ev.metrics["region_count"] >= 1
-    assert response.verdict.status == VerdictStatus.SUPPORTED
+    assert response.verdict.status in {VerdictStatus.SUPPORTED, VerdictStatus.SUPPORTED_WITH_LIMITATIONS}
 
 
 def test_matrix_5_invalid_corrupted_file(tmp_path: Path):

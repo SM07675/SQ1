@@ -4,6 +4,9 @@
 
 # Python virtual environments & bytecode
 .venv/
+.venv-integrated/
+backend/.pip-cache/
+backend/.pip-wheels/
 **/.venv/
 **/__pycache__/
 *.py[cod]
@@ -20,6 +23,8 @@ node_modules/
 **/node_modules/
 dist/
 **/dist/
+deployment/
+models/cache/
 *.tsbuildinfo
 **/*.tsbuildinfo
 
@@ -30,12 +35,26 @@ backend/artifacts/*
 !backend/artifacts/.gitkeep
 *.sqlite3
 *.sqlite3-journal
+*.db
 backend/temp_test*
 backend/test_out*
 backend/*.png
+out_tmp/
+*.tmp.png
+urban_coastal_tmp.png
+
+# Large model weights (>50MB, not suitable for GitHub)
+models/**/*.pt
+models/**/*.pth
+models/**/*.ckpt
+models/**/*.onnx
+models/**/*.safetensors
+models/**/*.bin
+models/**/*.tif
+models/**/*.tiff
+models/**/*.zip
 
 # OS files
 .DS_Store
 Thumbs.db
-
 

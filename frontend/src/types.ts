@@ -1,4 +1,13 @@
-export type VerdictStatus = "supported" | "disputed" | "insufficient_evidence";
+export type VerdictStatus = "supported" | "supported_with_limitations" | "disputed" | "insufficient_evidence" | "low_confidence" | "invalid_input" | "unsupported_task" | "model_unavailable" | "degraded_analysis";
+
+export interface StructuredLimitation {
+  type: string;
+  task: string;
+  required?: string[];
+  available?: string[];
+  impact: string;
+  mitigation?: string | null;
+}
 
 export interface TaskPlan {
   task: string;
@@ -26,6 +35,13 @@ export interface RasterMetadata {
   nodata_percent: number;
   band_names: string[];
   available_indices: string[];
+  file_format?: "png" | "jpeg" | "tiff" | "geotiff" | string;
+  modality?: "optical" | "sar" | "sar_like" | "unknown" | string;
+  sensor_verified?: boolean;
+  georeferenced?: boolean;
+  metadata_available?: boolean;
+  analysis_capabilities?: string[];
+  limitations?: string[];
 }
 
 export interface QualityReport {
@@ -60,6 +76,22 @@ export interface ArtifactRef {
   mime_type: string;
 }
 
+export interface SummaryMetric {
+  label: string;
+  value: string;
+  icon?: string | null;
+}
+
+export interface AnalysisSummary {
+  title: string;
+  headline: string;
+  metrics: SummaryMetric[];
+  explanation: string;
+  detected_changes?: string[];
+  confidence_percent?: number | null;
+  is_insufficient?: boolean;
+}
+
 export interface AnalysisResponse {
   result_id: string;
   query: string;
@@ -76,6 +108,7 @@ export interface AnalysisResponse {
     confidence_kind: string;
     contradictions: string[];
     limitations: string[];
+    structured_limitations?: StructuredLimitation[];
     confidence_breakdown: {
       input_quality: number;
       spatial_alignment: number;
@@ -104,6 +137,13 @@ export interface AnalysisResponse {
     normalization: string;
     manifest_url: string;
   }>;
+  summary?: AnalysisSummary | null;
+  input_configuration?: string;
+  findings?: Array<Record<string, unknown>>;
+  statistics?: Record<string, unknown>;
+  models_used?: string[];
+  timings?: Record<string, number>;
+  clarification?: string | null;
 }
 
 export interface ModelCapability {
@@ -171,4 +211,63 @@ export interface AnalysisRunRecord {
   geometries_count: number;
 }
 
+export interface ChatImageRecord {
+  image_id: string;
+  chat_id: string;
+  filename: string;
+  storage_path: string;
+  url: string;
+  uploaded_at: string;
+}
 
+export interface ChatMessageRecord {
+  message_id: string;
+  chat_id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  created_at: string;
+  attachments?: Array<{ name: string; url: string; type: string }>;
+  result?: AnalysisResponse | null;
+}
+
+export interface ChatSummary {
+  chat_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  icon?: string;
+  metadata?: Record<string, unknown>;
+  message_count?: number;
+  image_count?: number;
+  last_message?: string | null;
+  preview_text?: string;
+  latest_result?: AnalysisResponse | null;
+}
+
+export interface ChatDetail {
+  chat_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  icon?: string;
+  metadata?: Record<string, unknown>;
+  messages: ChatMessageRecord[];
+  images: ChatImageRecord[];
+  latest_result?: AnalysisResponse | null;
+}
+
+export type NavTab = "analyze" | "compare" | "explore" | "reports";
+export type ThemeMode = "dark" | "light";
+export type CompareMode = "swipe" | "side_by_side" | "overlay";
+
+export interface SpatialGeometryRecord {
+  geometry_id: string;
+  result_id: string;
+  evidence_kind: string;
+  geometry: {
+    type: string;
+    coordinates: any;
+  };
+  properties: Record<string, unknown>;
+  confidence?: number;
+}

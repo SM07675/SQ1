@@ -1,0 +1,18 @@
+# Prithvi-EO-2.0-300M-TL-Sen1Floods11 endpoint dependencies
+# Pinned for reproducibility — update minor versions as needed
+
+# EO foundation model framework
+terratorch>=1.0.0
+
+# Core ML
+torch>=2.1.0
+torchvision>=0.16.0
+numpy>=1.24.0
+
+# Geospatial raster I/O — reads COG tiles directly from signed URLs
+rasterio>=1.3.0
+GDAL>=3.6.0
+
+# HuggingFace plumbing (already in base image but explicit is safer)
+huggingface_hub>=0.20.0
+transformers>=4.36.0

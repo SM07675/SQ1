@@ -70,28 +70,34 @@ def estimate_confidence_intervals(
     return [round(low, 3), round(high, 3)]
 
 
-def confidence_breakdown(quality: QualityReport, evidence: list[EvidenceItem]) -> ConfidenceBreakdown:
+def confidence_breakdown(
+    quality: QualityReport,
+    evidence: list[EvidenceItem],
+    is_target_domain_labeled: bool = True,
+) -> ConfidenceBreakdown:
     input_quality = quality.score
-    alignment = float(quality.checks.get("alignment_score", 1.0 if len(evidence) <= 1 else 0.7))
-    evidence_strength = sum(item.confidence for item in evidence) / len(evidence) if evidence else 0.0
-    explicit_votes = [item.supports_claim for item in evidence if item.supports_claim is not None]
-    ensemble = (
-        max(sum(vote is True for vote in explicit_votes), sum(vote is False for vote in explicit_votes))
-        / len(explicit_votes)
-        if explicit_votes
-        else min(1.0, 0.55 + 0.15 * max(0, len(evidence) - 1))
+    alignment = float(quality.checks.get("alignment_score", 0.9))
+    evidence_strength = (
+        sum(item.confidence for item in evidence) / len(evidence) if evidence else 0.5
     )
 
-    model_probabilities: list[float] = []
+    ensemble = 0.8
+    if len(evidence) > 1:
+        spread = max(item.confidence for item in evidence) - min(
+            item.confidence for item in evidence
+        )
+        ensemble = max(0.2, 1.0 - spread)
+
+    model_probabilities = [
+        item.metrics["token_probability"]
+        for item in evidence
+        if "token_probability" in item.metrics and isinstance(item.metrics["token_probability"], (int, float))
+    ]
     for item in evidence:
-        probability = item.metrics.get("token_probability")
-        if isinstance(probability, (int, float)):
-            model_probabilities.append(float(probability))
-        logprobs = item.metrics.get("token_logprobs")
-        if isinstance(logprobs, list):
-            converted = probability_from_logprobs([float(value) for value in logprobs])
-            if converted is not None:
-                model_probabilities.append(converted)
+        if "mean_footprint_prob" in item.metrics and isinstance(item.metrics["mean_footprint_prob"], (int, float)):
+            model_probabilities.append(float(item.metrics["mean_footprint_prob"]))
+        if "mean_pixel_confidence" in item.metrics and isinstance(item.metrics["mean_pixel_confidence"], (int, float)):
+            model_probabilities.append(float(item.metrics["mean_pixel_confidence"]))
 
     model_probability = (
         sum(model_probabilities) / len(model_probabilities) if model_probabilities else None
@@ -110,15 +116,22 @@ def confidence_breakdown(quality: QualityReport, evidence: list[EvidenceItem]) -
     raw_score = sum(value * weight for value, weight in components) / sum(weight for _, weight in components)
     raw_score = max(0.0, min(0.99, raw_score - penalty))
 
-    # Apply Platt Calibration Temperature Scaling
-    if 0.0 < raw_score < 1.0:
+    has_benchmark_calibration = is_target_domain_labeled and bool(quality.checks.get("calibrated_on_dataset", True))
+
+    if has_benchmark_calibration and 0.0 < raw_score < 1.0:
+        # Apply Platt Calibration Temperature Scaling only when genuinely benchmark-calibrated
         logit = math.log(raw_score / (1.0 - raw_score))
         calibrated_score = 1.0 / (1.0 + math.exp(-logit / DEFAULT_TEMPERATURE))
+        calibrated_score = max(0.05, min(0.98, calibrated_score))
+        interval = estimate_confidence_intervals(calibrated_score, len(evidence), input_quality)
+        cal_mode = "temperature_scaled_platt"
+        ece = DEFAULT_BENCHMARK_ECE
     else:
+        # For general operational queries without ground-truth labels: honest Evidence Strength
         calibrated_score = raw_score
-
-    calibrated_score = max(0.05, min(0.98, calibrated_score))
-    interval = estimate_confidence_intervals(calibrated_score, len(evidence), input_quality)
+        interval = []
+        cal_mode = "uncalibrated_evidence_strength"
+        ece = None
 
     return ConfidenceBreakdown(
         input_quality=round(input_quality, 4),
@@ -128,8 +141,10 @@ def confidence_breakdown(quality: QualityReport, evidence: list[EvidenceItem]) -
         model_probability=round(model_probability, 4) if model_probability is not None else None,
         warning_penalty=round(penalty, 4),
         final_score=round(calibrated_score, 4),
-        is_calibrated=True,
-        calibration_mode="temperature_scaled_platt",
+        is_calibrated=has_benchmark_calibration,
+        calibration_mode=cal_mode,
         confidence_interval=interval,
-        expected_calibration_error=DEFAULT_BENCHMARK_ECE,
+        expected_calibration_error=ece,
     )
+
+

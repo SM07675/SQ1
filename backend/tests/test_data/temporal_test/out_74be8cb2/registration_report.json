@@ -1,0 +1,21 @@
+{
+  "attempted": true,
+  "method": "geospatial_crs_reproject",
+  "alignment_score": 0.90386962890625,
+  "status": "optimal",
+  "shift_x": 0.0,
+  "shift_y": 0.0,
+  "original_dims_a": [
+    256,
+    256
+  ],
+  "original_dims_b": [
+    256,
+    256
+  ],
+  "normalized_dims": [
+    256,
+    256
+  ],
+  "message": "Images successfully normalized and registered (geospatial_crs_reproject). Alignment score: 0.90."
+}

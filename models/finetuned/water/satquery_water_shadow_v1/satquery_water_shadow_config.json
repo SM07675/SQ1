@@ -1,0 +1,68 @@
+{
+  "format_version": 1,
+  "task": "surface_water_segmentation",
+  "architecture": "SatlasWaterNet",
+  "pretrained_model": "Sentinel2_SwinB_SI_MS",
+  "source_band_order": [
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5",
+    "B6",
+    "B7",
+    "B8",
+    "B8A",
+    "B9",
+    "B10",
+    "B11",
+    "B12"
+  ],
+  "satlas_band_order": [
+    "R_from_B4",
+    "G_from_B3",
+    "B_from_B2",
+    "B5",
+    "B6",
+    "B7",
+    "B8",
+    "B11",
+    "B12"
+  ],
+  "spectral_features": [
+    "NDWI",
+    "MNDWI",
+    "NDVI",
+    "AWEI_shadow",
+    "visible_brightness",
+    "B10_cirrus"
+  ],
+  "normalization": {
+    "RGB": "clip(raw/3000,0,1)",
+    "B5_B6_B7_B8_B11_B12": "clip(raw/8160,0,1)",
+    "source_scale": 10000
+  },
+  "postprocess": {
+    "threshold": 0.5999999999999999,
+    "min_area_pixels": 16
+  },
+  "tile_inference": {
+    "tile_size": 512,
+    "overlap": 128,
+    "blend": "Hann"
+  },
+  "event_split": {
+    "Bolivia": "test",
+    "Ghana": "val",
+    "India": "train",
+    "Mekong": "train",
+    "Nigeria": "train",
+    "Pakistan": "train",
+    "Paraguay": "test",
+    "Somalia": "train",
+    "Spain": "val",
+    "Sri-Lanka": "train",
+    "USA": "train"
+  },
+  "seed": 20260922
+}

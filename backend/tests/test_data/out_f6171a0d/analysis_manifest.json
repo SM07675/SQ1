@@ -1,0 +1,321 @@
+{
+  "result_id": "f6171a0d",
+  "task_plan": {
+    "task": "built_up_analysis",
+    "application": "single_image",
+    "specific_task": "built_up_analysis",
+    "sub_tasks": [
+      "built_up_analysis"
+    ],
+    "multi_intent": false,
+    "target": "built-up",
+    "asks_direction": false,
+    "tools": [
+      "raster_validator",
+      "ndbi_spectral_engine",
+      "builtup_grounding_engine",
+      "remoteclip",
+      "earthdial_4b_rgb",
+      "geoproof_arbiter"
+    ],
+    "reason": "Natural language request asks for built-up footprint and urban structure identification.",
+    "aoi_text": null,
+    "years": []
+  },
+  "mode": "deterministic_geospatial",
+  "assets": [
+    {
+      "filename": "sample.tif",
+      "width": 256,
+      "height": 256,
+      "bands": 3,
+      "dtype": "uint8",
+      "crs": "EPSG:3857",
+      "bounds": [
+        0.0,
+        0.0,
+        2560.0,
+        2560.0
+      ],
+      "resolution": [
+        10.0,
+        10.0
+      ],
+      "nodata": null,
+      "nodata_percent": 0.0,
+      "band_names": [
+        "band_1",
+        "band_2",
+        "band_3"
+      ],
+      "available_indices": [],
+      "source_format": "raster"
+    }
+  ],
+  "quality": {
+    "score": 0.96,
+    "compatible": true,
+    "blockers": [],
+    "warnings": [
+      "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+    ],
+    "checks": {
+      "file_count": 1,
+      "geospatial": true
+    }
+  },
+  "evidence": [
+    {
+      "kind": "building_detection_evidence",
+      "producer": "satquery_buildings_swinv2_fpn_spacenet2",
+      "summary": "1 building footprint(s) detected and delineated by satquery_buildings_v1 (SwinV2-B + FPN dual-head, SpaceNet-2), covering 7.57% of the scene concentrated in northern (upper) and western (left) sector.",
+      "confidence": 0.934,
+      "artifact_url": "/artifacts/f6171a0d/building_grounding_dl.png",
+      "metrics": {
+        "target": "buildings",
+        "is_deep_learning": true,
+        "model_name": "satquery_buildings_v1 (SwinV2-B + FPN dual-head, SpaceNet-2)",
+        "building_count": 1,
+        "coverage_percent": 7.57,
+        "total_area_m2": 493076.859,
+        "location_description": "northern (upper) and western (left) sector",
+        "mean_footprint_prob": 0.957,
+        "model_metrics": {
+          "dataset": "SpaceNet 2",
+          "train_geographies": [
+            "Vegas",
+            "Shanghai"
+          ],
+          "validation_geographies": [
+            "Paris"
+          ],
+          "test_geographies": [
+            "Khartoum"
+          ]
+        }
+      },
+      "supports_claim": true,
+      "confidence_source": "producer_score"
+    },
+    {
+      "kind": "remoteclip_tile_retrieval",
+      "producer": "remoteclip_semantic_grounding_v2",
+      "summary": "Evaluated 1 candidate blocks; no block met the semantic relevance threshold (0.70). Safe abstention triggered.",
+      "confidence": 0.35,
+      "artifact_url": "/artifacts/f6171a0d/tile_retrieval/remoteclip_top_tiles_mosaic.png",
+      "metrics": {
+        "total_candidate_tiles": 1,
+        "relevant_matching_regions": 0,
+        "excluded_regions": 1,
+        "relevance_threshold": 0.7,
+        "mean_similarity": 0.0,
+        "max_similarity": 0.594
+      },
+      "supports_claim": false,
+      "confidence_source": "producer_score"
+    }
+  ],
+  "verdict": {
+    "status": "supported",
+    "answer": "1 building footprint detected across 8% of the image.",
+    "confidence": 0.684,
+    "confidence_kind": "evidence_weighted_spatial_ensemble_v2",
+    "contradictions": [],
+    "limitations": [
+      "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+    ],
+    "confidence_breakdown": {
+      "input_quality": 0.96,
+      "spatial_alignment": 0.9,
+      "evidence_strength": 0.642,
+      "ensemble_agreement": 0.416,
+      "model_probability": 0.957,
+      "warning_penalty": 0.04,
+      "final_score": 0.6839,
+      "is_calibrated": true,
+      "calibration_mode": "temperature_scaled_platt",
+      "confidence_interval": [
+        0.449,
+        0.919
+      ],
+      "expected_calibration_error": 0.042
+    }
+  },
+  "trace": [
+    {
+      "step": 1,
+      "component": "typed_planner",
+      "action": "Compiled built_up_analysis",
+      "status": "ok",
+      "duration_ms": 0,
+      "details": {
+        "tools": [
+          "raster_validator",
+          "ndbi_spectral_engine",
+          "builtup_grounding_engine",
+          "remoteclip",
+          "earthdial_4b_rgb",
+          "geoproof_arbiter"
+        ],
+        "reason": "Natural language request asks for built-up footprint and urban structure identification.",
+        "target": "built-up"
+      }
+    },
+    {
+      "step": 2,
+      "component": "raster_validator",
+      "action": "Validated file headers, CRS, NoData, and compatibility",
+      "status": "ok",
+      "duration_ms": 9,
+      "details": {
+        "score": 0.96,
+        "compatible": true,
+        "blockers": [],
+        "warnings": [
+          "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+        ],
+        "checks": {
+          "file_count": 1,
+          "geospatial": true
+        }
+      }
+    },
+    {
+      "step": 3,
+      "component": "building_detection_engine",
+      "action": "Executed satquery_buildings_v1 DL building footprint + watershed instance detection (1 buildings)",
+      "status": "ok",
+      "duration_ms": 4065,
+      "details": {
+        "is_deep_learning": true,
+        "building_count": 1,
+        "coverage_percent": 7.57,
+        "producer": "satquery_buildings_swinv2_fpn_spacenet2"
+      }
+    },
+    {
+      "step": 4,
+      "component": "remoteclip_retriever",
+      "action": "Executed RemoteCLIP semantic relevance filtering and spatial grouping",
+      "status": "warning",
+      "duration_ms": 2624,
+      "details": {
+        "total_candidates": 1,
+        "relevant_matching": 0,
+        "excluded": 1,
+        "relevance_threshold": 0.7,
+        "max_similarity": 0.594
+      }
+    },
+    {
+      "step": 5,
+      "component": "geoproof",
+      "action": "Applied multi-witness evidence verification and calibrated confidence estimation",
+      "status": "supported",
+      "duration_ms": 0,
+      "details": {
+        "confidence_kind": "evidence_weighted_spatial_ensemble_v2",
+        "evidence_count": 2
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "preview_1.png",
+      "url": "/artifacts/f6171a0d/preview_1.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "tiles_1_manifest.json",
+      "url": "/artifacts/f6171a0d/preprocess_1/tiles_manifest.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "building_grounding_dl.png",
+      "url": "/artifacts/f6171a0d/building_grounding_dl.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "building_footprint_dl.png",
+      "url": "/artifacts/f6171a0d/building_footprint_dl.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "building_instances_dl.png",
+      "url": "/artifacts/f6171a0d/building_instances_dl.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "buildings_dl.geojson",
+      "url": "/artifacts/f6171a0d/buildings_dl.geojson",
+      "mime_type": "application/geo+json"
+    },
+    {
+      "name": "remoteclip_top_tiles_mosaic.png",
+      "url": "/artifacts/f6171a0d/tile_retrieval/remoteclip_top_tiles_mosaic.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "remoteclip_top_rois.geojson",
+      "url": "/artifacts/f6171a0d/tile_retrieval/remoteclip_top_rois.geojson",
+      "mime_type": "application/geo+json"
+    },
+    {
+      "name": "remoteclip_retrieval_manifest.json",
+      "url": "/artifacts/f6171a0d/tile_retrieval/remoteclip_retrieval_manifest.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "GeoProof_Report.pdf",
+      "url": "/artifacts/f6171a0d/GeoProof_Report.pdf",
+      "mime_type": "application/pdf"
+    }
+  ],
+  "query": "Find built-up areas.",
+  "generated_at": "2026-09-24T18:22:23.524398+00:00",
+  "preprocessing": [
+    {
+      "filename": "sample.tif",
+      "source_format": "raster",
+      "selected_variable": null,
+      "available_variables": [],
+      "tile_size": 448,
+      "overlap": 64,
+      "total_candidate_tiles": 1,
+      "materialized_tiles": 1,
+      "complete_coverage": true,
+      "normalization": "per-band percentile 2-98 to uint8",
+      "manifest_url": "/artifacts/f6171a0d/preprocess_1/tiles_manifest.json"
+    }
+  ],
+  "summary": {
+    "title": "BUILDING DETECTION",
+    "headline": "1 building footprint detected across 8% of the image.",
+    "metrics": [
+      {
+        "label": "Buildings Found",
+        "value": "1",
+        "icon": "\ud83c\udfe2"
+      },
+      {
+        "label": "Built Coverage",
+        "value": "8%",
+        "icon": "\ud83d\udcd0"
+      },
+      {
+        "label": "Detected Area",
+        "value": "8% of scene",
+        "icon": "\ud83d\udccd"
+      },
+      {
+        "label": "Confidence",
+        "value": "68%",
+        "icon": "\u2713"
+      }
+    ],
+    "explanation": "A total of 1 building footprints were delineated across the scene, covering approximately 8% of the analyzed image.",
+    "detected_changes": [],
+    "confidence_percent": 68,
+    "is_insufficient": false
+  }
+}

@@ -20,15 +20,23 @@ from app.schemas import (
     AssetRecord,
     BenchmarkRunRequest,
     BenchmarkRunResponse,
+    ChatCreateRequest,
+    ChatDetailResponse,
+    ChatImageResponse,
+    ChatMessageResponse,
+    ChatRenameRequest,
+    ChatSummaryItem,
     DatasetSummary,
     QueryRequest,
     SpatialFeatureCollection,
     SpatialGeometryRecord,
 )
 from app.services.benchmarks import list_available_datasets, run_vrsbench_suite
+from app.services.chat_service import answer_follow_up_query, generate_chat_title, get_topic_icon
 from app.services.ingestion import NETCDF_SUFFIXES, build_model_tiles, prepare_source
 from app.services.model_registry import registry
-from app.services.orchestrator import analyze
+from app.services.integrated_analysis import analyze
+from app.services.planner import is_optical_sar_query
 from app.services.raster import inspect_raster, render_preview
 from app.services.report import write_pdf_report
 
@@ -50,13 +58,16 @@ app = FastAPI(
     description="Evidence-first spectral, temporal and optical-SAR geospatial analysis for SIH26167.",
     lifespan=lifespan,
 )
+configured_origins = list(settings.cors_origins)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(settings.cors_origins),
+    allow_origins=configured_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 @app.get("/artifacts/{result_id}/GeoProof_Report.pdf")
@@ -135,7 +146,21 @@ def health() -> dict[str, object]:
 
 @app.get("/api/v1/models")
 def model_capabilities() -> list[dict[str, object]]:
-    return registry.capabilities()
+    from satquery_engine.services.model_registry import registry as integrated_registry
+
+    current = registry.capabilities()
+    surface = [
+        item for item in integrated_registry.capabilities()
+        if item.get("name") in {"building_satellite", "land_deepness", "land_flair_hub", "water_finetuned", "water_s2_surface"}
+    ]
+    return current + surface
+
+
+@app.get("/api/v1/models/status")
+def model_status() -> dict[str, object]:
+    from satquery_engine.config import settings as integrated_settings
+
+    return {"model_root": str(integrated_settings.model_dir), "models": model_capabilities()}
 
 
 @app.post("/api/v1/analyze", response_model=AnalysisResponse)
@@ -329,3 +354,300 @@ def list_analysis_runs(
     return [AnalysisRunRecord.model_validate(r) for r in runs]
 
 
+# =========================================================================
+# Persistent Conversation & Chat System Endpoints
+# =========================================================================
+
+@app.get("/api/v1/chats", response_model=list[ChatSummaryItem])
+def list_chats(limit: int = 100) -> list[ChatSummaryItem]:
+    chats = repository.list_chats(limit=limit)
+    res = []
+    for c in chats:
+        icon = get_topic_icon(c["title"], c.get("last_message") or "")
+        res.append(ChatSummaryItem(
+            chat_id=c["chat_id"],
+            title=c["title"],
+            created_at=c["created_at"],
+            updated_at=c["updated_at"],
+            last_message=c.get("last_message"),
+            message_count=c.get("message_count", 0),
+            image_count=c.get("image_count", 0),
+            icon=icon,
+            metadata=c.get("metadata", {}),
+        ))
+    return res
+
+
+@app.post("/api/v1/chats", response_model=ChatSummaryItem)
+def create_chat(req: ChatCreateRequest) -> ChatSummaryItem:
+    chat_id = req.chat_id or f"chat_{uuid.uuid4().hex[:12]}"
+    title = req.title or "New Analysis"
+    created = repository.create_chat(chat_id, title, req.metadata)
+    icon = get_topic_icon(title)
+    return ChatSummaryItem(
+        chat_id=created["chat_id"],
+        title=created["title"],
+        created_at=created["created_at"],
+        updated_at=created["updated_at"],
+        icon=icon,
+        metadata=created["metadata"],
+    )
+
+
+@app.get("/api/v1/chats/{chat_id}", response_model=ChatDetailResponse)
+def get_chat(chat_id: str) -> ChatDetailResponse:
+    chat = repository.get_chat(chat_id)
+    if chat is None:
+        raise HTTPException(404, f"Chat not found: {chat_id}")
+
+    db_images = repository.get_chat_images(chat_id)
+    images = [
+        ChatImageResponse(
+            image_id=img["image_id"],
+            chat_id=img["chat_id"],
+            filename=img["filename"],
+            url=img["url"],
+            metadata=img.get("metadata", {}),
+            created_at=img["created_at"],
+        )
+        for img in db_images
+    ]
+
+    db_messages = repository.get_chat_messages(chat_id)
+    messages = []
+    latest_result = None
+    for msg in db_messages:
+        res_obj = None
+        if msg.get("result"):
+            try:
+                res_obj = AnalysisResponse.model_validate(msg["result"])
+                latest_result = res_obj
+            except Exception:
+                pass
+        messages.append(ChatMessageResponse(
+            message_id=msg["message_id"],
+            chat_id=msg["chat_id"],
+            role=msg["role"],
+            content=msg["content"],
+            created_at=msg["created_at"],
+            attachments=msg.get("attachments", []),
+            result=res_obj,
+        ))
+
+    icon = get_topic_icon(chat["title"], messages[0].content if messages else "")
+    return ChatDetailResponse(
+        chat_id=chat["chat_id"],
+        title=chat["title"],
+        created_at=chat["created_at"],
+        updated_at=chat["updated_at"],
+        icon=icon,
+        metadata=chat["metadata"],
+        images=images,
+        messages=messages,
+        latest_result=latest_result,
+    )
+
+
+@app.patch("/api/v1/chats/{chat_id}", response_model=ChatSummaryItem)
+def rename_chat(chat_id: str, req: ChatRenameRequest) -> ChatSummaryItem:
+    chat = repository.get_chat(chat_id)
+    if chat is None:
+        raise HTTPException(404, f"Chat not found: {chat_id}")
+    repository.update_chat(chat_id, title=req.title.strip())
+    updated = repository.get_chat(chat_id)
+    icon = get_topic_icon(updated["title"])
+    return ChatSummaryItem(
+        chat_id=updated["chat_id"],
+        title=updated["title"],
+        created_at=updated["created_at"],
+        updated_at=updated["updated_at"],
+        icon=icon,
+        metadata=updated["metadata"],
+    )
+
+
+@app.delete("/api/v1/chats/{chat_id}")
+def delete_chat(chat_id: str) -> dict[str, Any]:
+    chat = repository.get_chat(chat_id)
+    if chat is None:
+        raise HTTPException(404, f"Chat not found: {chat_id}")
+
+    chat_dir = settings.artifact_dir / "chats" / chat_id
+    if chat_dir.exists():
+        shutil.rmtree(chat_dir, ignore_errors=True)
+
+    repository.delete_chat(chat_id)
+    return {"status": "ok", "deleted": True, "deleted_chat_id": chat_id}
+
+
+@app.post("/api/v1/chats/{chat_id}/messages", response_model=ChatMessageResponse)
+async def post_chat_message(
+    chat_id: str,
+    query: Annotated[str, Form(min_length=1, max_length=1000)],
+    image_a: Annotated[UploadFile | None, File()] = None,
+    image_b: Annotated[UploadFile | None, File()] = None,
+    files: Annotated[list[UploadFile] | None, File()] = None,
+    pair_type: Annotated[str, Form(pattern="^(auto|single|bi_temporal|optical_sar)$")] = "auto",
+    netcdf_variable: Annotated[str | None, Form()] = None,
+) -> ChatMessageResponse:
+    chat = repository.get_chat(chat_id)
+    if chat is None:
+        chat = repository.create_chat(chat_id, "New Analysis")
+
+    if files and len(files) > 0:
+        if image_a is None and len(files) >= 1:
+            image_a = files[0]
+        if image_b is None and len(files) >= 2:
+            image_b = files[1]
+
+    chat_dir = settings.artifact_dir / "chats" / chat_id
+    chat_dir.mkdir(parents=True, exist_ok=True)
+
+    db_images = repository.get_chat_images(chat_id)
+    stored_paths: list[Path] = [Path(img["storage_path"]) for img in db_images if Path(img["storage_path"]).exists()]
+    user_msg_attachments: list[dict[str, Any]] = []
+
+    # CASE 1: New image(s) provided in message
+    if image_a is not None:
+        ext_a = Path(image_a.filename or ".png").suffix.lower()
+        img_a_path = chat_dir / f"image_1{ext_a}"
+        await _save_upload(image_a, img_a_path)
+        img_a_url = f"/artifacts/chats/{chat_id}/image_1{ext_a}"
+        img_id_1 = str(uuid.uuid4())
+        repository.add_chat_image(img_id_1, chat_id, image_a.filename or "image_1", img_a_path, img_a_url)
+        stored_paths = [img_a_path]
+        user_msg_attachments.append({"name": image_a.filename, "url": img_a_url, "type": "image"})
+
+        if image_b is not None:
+            ext_b = Path(image_b.filename or ".png").suffix.lower()
+            img_b_path = chat_dir / f"image_2{ext_b}"
+            await _save_upload(image_b, img_b_path)
+            img_b_url = f"/artifacts/chats/{chat_id}/image_2{ext_b}"
+            img_id_2 = str(uuid.uuid4())
+            repository.add_chat_image(img_id_2, chat_id, image_b.filename or "image_2", img_b_path, img_b_url)
+            stored_paths.append(img_b_path)
+            user_msg_attachments.append({"name": image_b.filename, "url": img_b_url, "type": "image"})
+
+        # Record user message
+        user_msg_id = str(uuid.uuid4())
+        repository.add_chat_message(user_msg_id, chat_id, "user", query, attachments=user_msg_attachments)
+
+        # Run pipeline
+        result_id = str(uuid.uuid4())
+        output_dir = settings.artifact_dir / result_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        prepared_paths = [
+            prepare_source(path, output_dir / f"prepared_{index + 1}", netcdf_variable).raster_path
+            for index, path in enumerate(stored_paths)
+        ]
+
+        effective_pair_type = pair_type
+        if len(stored_paths) == 2 and pair_type in ("single", "auto"):
+            effective_pair_type = "optical_sar" if is_optical_sar_query(query) else "bi_temporal"
+
+        response = await analyze(
+            result_id=result_id,
+            query=query,
+            pair_type=effective_pair_type,
+            image_paths=prepared_paths,
+            output_dir=output_dir,
+        )
+        repository.save_result(result_id, response.model_dump(mode="json"), response.generated_at, output_dir=output_dir)
+
+        # Update chat title if still default
+        if chat["title"] in ("New Analysis", "Untitled"):
+            new_title = generate_chat_title(query, pair_type, response)
+            repository.update_chat(chat_id, title=new_title)
+
+        # Record assistant message
+        asst_msg_id = str(uuid.uuid4())
+        assistant_content = response.verdict.answer
+        if response.summary and response.summary.explanation:
+            assistant_content = response.summary.explanation
+
+        asst_msg = repository.add_chat_message(
+            asst_msg_id,
+            chat_id,
+            "assistant",
+            assistant_content,
+            attachments=[],
+            result=response.model_dump(mode="json"),
+        )
+        return ChatMessageResponse(
+            message_id=asst_msg["message_id"],
+            chat_id=chat_id,
+            role="assistant",
+            content=asst_msg["content"],
+            created_at=asst_msg["created_at"],
+            attachments=[],
+            result=response,
+        )
+
+    # CASE 2: Follow-up question on existing image(s)
+    user_msg_id = str(uuid.uuid4())
+    repository.add_chat_message(user_msg_id, chat_id, "user", query, attachments=[])
+
+    # Fetch latest result from previous messages
+    db_messages = repository.get_chat_messages(chat_id)
+    latest_result_dict = None
+    for m in reversed(db_messages):
+        if m.get("result"):
+            latest_result_dict = m["result"]
+            break
+
+    # Determine answer or reanalysis requirement
+    image_path_strs = [str(p) for p in stored_paths]
+    answer_text, needs_reanalysis = answer_follow_up_query(
+        query=query,
+        latest_result=latest_result_dict,
+        image_paths=image_path_strs,
+    )
+
+    result_to_attach: dict[str, Any] | None = None
+    parsed_response: AnalysisResponse | None = None
+
+    if needs_reanalysis and stored_paths:
+        result_id = str(uuid.uuid4())
+        output_dir = settings.artifact_dir / result_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        prepared_paths = [
+            prepare_source(path, output_dir / f"prepared_{index + 1}", netcdf_variable).raster_path
+            for index, path in enumerate(stored_paths)
+        ]
+        effective_pair_type = pair_type
+        if len(stored_paths) == 2 and pair_type in ("single", "auto"):
+            effective_pair_type = "optical_sar" if is_optical_sar_query(query) else "bi_temporal"
+
+        new_response = await analyze(
+            result_id=result_id,
+            query=query,
+            pair_type=effective_pair_type,
+            image_paths=prepared_paths,
+            output_dir=output_dir,
+        )
+        repository.save_result(result_id, new_response.model_dump(mode="json"), new_response.generated_at, output_dir=output_dir)
+        result_to_attach = new_response.model_dump(mode="json")
+        parsed_response = new_response
+        answer_text = new_response.verdict.answer
+        if new_response.summary and new_response.summary.explanation:
+            answer_text = new_response.summary.explanation
+
+    asst_msg_id = str(uuid.uuid4())
+    asst_msg = repository.add_chat_message(
+        asst_msg_id,
+        chat_id,
+        "assistant",
+        answer_text,
+        attachments=[],
+        result=result_to_attach,
+    )
+
+    return ChatMessageResponse(
+        message_id=asst_msg["message_id"],
+        chat_id=chat_id,
+        role="assistant",
+        content=asst_msg["content"],
+        created_at=asst_msg["created_at"],
+        attachments=[],
+        result=parsed_response,
+    )

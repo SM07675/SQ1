@@ -37,28 +37,46 @@ OPTICAL_SAR_KEYWORDS = (
     "optical + sar", "optical and sar", "radar", "sar", "multispectral and radar",
     "both sensors", "cross-modal", "cross modal", "combine optical and sar",
     "use both images", "radar evidence", "optical evidence", "sentinel-1 and sentinel-2",
-    "optical-sar", "sar-optical", "what information does sar add", "surface characteristics"
+    "optical-sar", "sar-optical", "what information does sar add", "surface characteristics",
+    "what does optical show", "what does sar show", "what additional information does sar provide",
+    "identify built-up areas using both", "identify water using optical and sar", "compare optical and sar",
+    "using both", "both images", "optical and radar", "radar and optical", "complementary analysis",
+    "sar show", "optical show", "radar show", "sar add"
 )
 
 LAND_COVER_KEYWORDS = (
     "land cover", "landcover", "land-cover", "terrain", "types of terrain", "types of land",
     "what types of land", "composed of", "composition of land", "agricultural land",
     "is this area mostly agricultural", "classify the visible land cover", "what can i see here",
-    "what land cover", "land-cover types", "land use", "land classification"
+    "what land cover", "what land is", "what land", "land-cover types", "land use", "land classification",
+    "find land", "find the land", "locate land", "locate land cover", "identify land",
+    "detect land", "detect land cover", "map land", "map land cover", "land cover map",
+    "segment land", "segment land cover", "land segmentation", "land classes", "land categories",
+    "classify land", "classify land cover", "surface composition"
 )
 
 SCENE_DESCRIPTION_KEYWORDS = (
     "describe this image", "describe the image", "describe this scene", "describe the scene",
     "describe", "what is visible in this scene", "what is visible in this image", "give me an overview",
     "what does this image contain", "overview of this satellite image", "overview", "summarize this image",
-    "summarize", "caption this", "caption", "tell me about this scene"
+    "summarize", "caption this", "caption", "tell me about this scene", "what is the scene",
+    "what is visible", "what's visible"
 )
 
 OBJECT_IDENTIFICATION_KEYWORDS = (
     "where are the buildings", "identify roads", "find the river", "locate agricultural fields",
-    "identify major objects", "what objects are visible", "locate structures", "where are the settlements",
-    "locate the airport", "locate", "identify", "find the", "detect objects", "where is", "where are"
+    "identify major objects", "what objects are visible", "what objects are present", "objects present",
+    "locate structures", "where are the settlements", "locate the airport", "locate", "identify",
+    "find the", "detect objects", "where is", "where are"
 )
+
+BUILDING_DETECTION_KEYWORDS = (
+    "how many buildings", "count buildings", "count the buildings", "number of buildings",
+    "building footprint", "building footprints", "detect buildings", "building detection",
+    "identify buildings", "map buildings", "building count", "buildings in this image",
+    "structures detected", "footprint detection", "delineate buildings",
+)
+
 
 UNSUPPORTED_PATTERNS = (
     r"\bcapital of\b",
@@ -139,21 +157,42 @@ def plan_query(query: str, image_count: int = 1, pair_type: str = "auto") -> Tas
     aoi_match = re.search(r"\b(?:in|within|around|near)\s+([a-z][a-z0-9 ._-]{1,60}?)(?:\s+between|\s+from|\s+in\s+\d{4}|[?.!,]|$)", q)
     aoi_text = aoi_match.group(1).strip() if aoi_match else None
 
+    # Auto-resolve multi-image pair type: 2 images default to bi_temporal (or optical_sar if specified)
+    effective_pair = pair_type
+    if image_count >= 2:
+        if pair_type == "optical_sar" or is_optical_sar_query(q):
+            effective_pair = "optical_sar"
+        else:
+            effective_pair = "bi_temporal"
+    elif is_change_query(q):
+        effective_pair = "bi_temporal"
+
     # =========================================================================
     # APPLICATION 3: Optical + SAR Cross-Modal Analysis
     # =========================================================================
-    if pair_type == "optical_sar" or (pair_type == "auto" and is_optical_sar_query(q)):
-        specific_task = "cross_modal_comparative"
-        tools = ["raster_validator", "croma"]
-        if target == "water":
+    if effective_pair == "optical_sar" or is_optical_sar_query(q):
+        if any(k in q for k in ("what does optical show", "optical show", "only optical", "visible in optical")):
+            specific_task = "optical_focus_analysis"
+            tools = ["raster_validator", "optical_evidence_engine", "earthdial_4b_ms", "geoproof_arbiter"]
+        elif any(k in q for k in ("what does sar show", "sar show", "what does radar show", "radar show", "only sar")):
+            specific_task = "sar_focus_analysis"
+            tools = ["raster_validator", "sar_backscatter_detector", "earthdial_4b_ms", "geoproof_arbiter"]
+        elif any(k in q for k in ("what additional information does sar provide", "what information does sar add", "what does sar add", "what additional information")):
+            specific_task = "sar_complementary_analysis"
+            tools = ["raster_validator", "sar_backscatter_detector", "croma", "earthdial_4b_ms", "geoproof_arbiter"]
+        elif target == "water":
             specific_task = "cross_modal_water"
-            tools.extend(["optical_ndwi", "sar_backscatter_detector", "sensor_agreement_arbiter"])
+            tools = ["raster_validator", "optical_water_grounding_engine", "sar_backscatter_detector", "croma", "geoproof_arbiter"]
         elif target == "built-up":
             specific_task = "cross_modal_builtup"
-            tools.extend(["optical_evidence_engine", "sar_evidence_engine", "earthdial_ms"])
+            tools = ["raster_validator", "satquery_buildings_dl", "sar_backscatter_detector", "croma", "geoproof_arbiter"]
+        elif any(k in q for k in ("compare optical and sar", "compare", "comparative")):
+            specific_task = "cross_modal_comparative"
+            tools = ["raster_validator", "croma", "sar_backscatter_detector", "earthdial_4b_ms", "geoproof_arbiter"]
         else:
-            tools.extend(["optical_evidence_engine", "sar_evidence_engine", "earthdial_ms"])
-        tools.extend(["geoproof_arbiter", "platt_scaling"])
+            specific_task = "cross_modal_comparative"
+            tools = ["raster_validator", "croma", "optical_evidence_engine", "sar_backscatter_detector", "earthdial_4b_ms", "geoproof_arbiter"]
+
         return TaskPlan(
             task=TaskType.OPTICAL_SAR,
             application="optical_sar",
@@ -169,7 +208,7 @@ def plan_query(query: str, image_count: int = 1, pair_type: str = "auto") -> Tas
     # =========================================================================
     # APPLICATION 2: Bi-Temporal Change Analysis
     # =========================================================================
-    if pair_type == "bi_temporal" or (pair_type == "auto" and is_change_query(q)):
+    if effective_pair == "bi_temporal" or is_change_query(q) or image_count >= 2:
         tools = ["raster_validator", "phase_correlation_ecc_registration", "change_detector"]
         specific_task = "general_change"
         if target == "built-up":
@@ -205,6 +244,7 @@ def plan_query(query: str, image_count: int = 1, pair_type: str = "auto") -> Tas
     has_water_intent = any(k in q for k in ("water", "lake", "river", "ocean", "flood", "pond", "reservoir", "wetland"))
     has_veg_intent = any(k in q for k in ("vegetation", "greenery", "forest", "crop", "tree", "canopy", "ndvi"))
     has_built_intent = any(k in q for k in ("built-up", "built up", "building", "buildings", "urban", "construction", "city", "settlement"))
+    has_building_detection_intent = any(k in q for k in BUILDING_DETECTION_KEYWORDS)
     has_scene_intent = any(k in q for k in SCENE_DESCRIPTION_KEYWORDS)
 
     sub_tasks: list[str] = []
@@ -216,6 +256,8 @@ def plan_query(query: str, image_count: int = 1, pair_type: str = "auto") -> Tas
         sub_tasks.append("vegetation_analysis")
     if has_built_intent and ("built-up" in q or "urban" in q or "building" in q or "city" in q):
         sub_tasks.append("built_up_analysis")
+    if has_building_detection_intent:
+        sub_tasks.append("building_detection")
     if has_scene_intent and not has_land_cover_intent:
         sub_tasks.append("scene_description")
 
@@ -223,7 +265,7 @@ def plan_query(query: str, image_count: int = 1, pair_type: str = "auto") -> Tas
 
     # Task Category 1: Land Cover Understanding
     if has_land_cover_intent:
-        tools = ["raster_validator", "land_cover_engine", "ndvi_spectral", "ndwi_spectral", "ndbi_spectral", "remoteclip", "earthdial_4b_rgb", "geoproof_arbiter"]
+        tools = ["raster_validator", "satquery_landcover_dl", "land_cover_engine", "ndvi_spectral", "ndwi_spectral", "ndbi_spectral", "remoteclip", "earthdial_4b_rgb", "geoproof_arbiter"]
         return TaskPlan(
             task=TaskType.LAND_COVER,
             application="single_image",
@@ -272,7 +314,23 @@ def plan_query(query: str, image_count: int = 1, pair_type: str = "auto") -> Tas
 
     is_vqa_question = any(k in q for k in ("how many", "count", "is there", "are there", "what is the number", "number of", "can you see", "is this area mostly"))
 
-    # Task Category 4: Built-up / Urban Analysis
+    # Task Category 4a: Building Detection (DL footprint + instance)
+    if has_building_detection_intent or (is_vqa_question and any(k in q for k in ("building", "buildings", "structure", "structures", "footprint"))):
+        tools = ["raster_validator", "satquery_buildings_dl", "building_footprint_engine", "remoteclip", "geoproof_arbiter"]
+        return TaskPlan(
+            task=TaskType.BUILDINGS,
+            application="single_image",
+            specific_task="building_detection",
+            sub_tasks=sub_tasks if is_multi_intent else ["building_detection"],
+            multi_intent=is_multi_intent,
+            target="built-up",
+            tools=tools,
+            reason="Natural language request asks to detect, count, or delineate building footprints.",
+            aoi_text=aoi_text,
+            years=years,
+        )
+
+    # Task Category 4b: Built-up / Urban Analysis
     if not is_vqa_question and ((has_built_intent and any(k in q for k in ("built-up", "built up", "urban", "urbanized", "where are the buildings", "locate buildings", "city", "settlement", "identify built-up"))) or (target == "built-up" and not has_scene_intent)):
         tools = ["raster_validator", "ndbi_spectral_engine", "builtup_grounding_engine", "remoteclip", "earthdial_4b_rgb", "geoproof_arbiter"]
         return TaskPlan(

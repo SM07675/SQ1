@@ -1,0 +1,5 @@
+{
+  "water_probability_threshold": 0.6,
+  "minimum_component_area_pixels": 16,
+  "uncertainty_threshold": 0.3
+}

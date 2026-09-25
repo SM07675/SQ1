@@ -2,6 +2,7 @@ import React from "react";
 
 export type StatusVariant =
   | "supported"
+  | "supported_with_limitations"
   | "disputed"
   | "insufficient_evidence"
   | "passed"

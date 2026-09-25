@@ -13,6 +13,9 @@ from rasterio.enums import Resampling
 from rasterio.warp import calculate_default_transform, reproject
 
 
+import cv2
+
+
 @dataclass(frozen=True)
 class RegistrationReport:
     attempted: bool
@@ -25,6 +28,10 @@ class RegistrationReport:
     original_dims_b: tuple[int, int]
     normalized_dims: tuple[int, int]
     message: str
+    transform: list[list[float]] | None = None
+    matched_keypoints: int = 0
+    inlier_ratio: float = 0.0
+    fallback_reason: str | None = None
 
 
 def _normalize_luminance(arr: np.ndarray) -> np.ndarray:
@@ -111,6 +118,107 @@ def _apply_shift(image_arr: np.ndarray, shift_y: float, shift_x: float) -> np.nd
     return shifted
 
 
+def _warp_channels(data: np.ndarray, warp_matrix: np.ndarray, target_w: int, target_h: int) -> np.ndarray:
+    """Warp all 2D channels in a (C, H, W) array using an affine transform."""
+    out = np.zeros_like(data)
+    for ch in range(data.shape[0]):
+        out[ch] = cv2.warpAffine(
+            data[ch].astype("float32"),
+            warp_matrix.astype("float32"),
+            (target_w, target_h),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REFLECT_101,
+        )
+    return out
+
+
+def _refine_ecc(
+    gray_a: np.ndarray,
+    gray_b: np.ndarray,
+    init_shift_x: float,
+    init_shift_y: float,
+) -> tuple[np.ndarray | None, bool]:
+    """Refine spatial alignment using Enhanced Correlation Coefficient (ECC) maximization."""
+    try:
+        im1_u8 = (gray_a * 255.0).astype(np.uint8)
+        im2_u8 = (gray_b * 255.0).astype(np.uint8)
+        warp_matrix = np.eye(2, 3, dtype=np.float32)
+        warp_matrix[0, 2] = float(init_shift_x)
+        warp_matrix[1, 2] = float(init_shift_y)
+        criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 35, 1e-3)
+        _, refined = cv2.findTransformECC(im1_u8, im2_u8, warp_matrix, cv2.MOTION_EUCLIDEAN, criteria)
+        return refined, True
+    except Exception:
+        try:
+            warp_matrix = np.eye(2, 3, dtype=np.float32)
+            warp_matrix[0, 2] = float(init_shift_x)
+            warp_matrix[1, 2] = float(init_shift_y)
+            criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 25, 1e-3)
+            _, refined = cv2.findTransformECC(im1_u8, im2_u8, warp_matrix, cv2.MOTION_TRANSLATION, criteria)
+            return refined, True
+        except Exception:
+            return None, False
+
+
+def _register_feature_matching(
+    gray_a: np.ndarray,
+    gray_b: np.ndarray,
+) -> tuple[np.ndarray | None, int, float, str]:
+    """Automatic fallback for rotational/affine distortion using SIFT/ORB + RANSAC."""
+    im1_u8 = (gray_a * 255.0).astype(np.uint8)
+    im2_u8 = (gray_b * 255.0).astype(np.uint8)
+
+    detector_name = "SIFT"
+    try:
+        sift = cv2.SIFT_create(nfeatures=1500)
+        kp1, des1 = sift.detectAndCompute(im1_u8, None)
+        kp2, des2 = sift.detectAndCompute(im2_u8, None)
+        is_float_desc = True
+    except Exception:
+        kp1, des1, kp2, des2 = [], None, [], None
+        is_float_desc = False
+
+    if des1 is None or des2 is None or len(kp1) < 8 or len(kp2) < 8:
+        detector_name = "ORB"
+        try:
+            orb = cv2.ORB_create(nfeatures=2000)
+            kp1, des1 = orb.detectAndCompute(im1_u8, None)
+            kp2, des2 = orb.detectAndCompute(im2_u8, None)
+            is_float_desc = False
+        except Exception:
+            return None, 0, 0.0, "none"
+
+    if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
+        return None, 0, 0.0, detector_name
+
+    try:
+        matcher = cv2.BFMatcher(cv2.NORM_L2 if is_float_desc else cv2.NORM_HAMMING)
+        matches = matcher.knnMatch(des2, des1, k=2)
+        good = [m for m, n in matches if len((m, n)) == 2 and m.distance < 0.75 * n.distance]
+    except Exception:
+        return None, 0, 0.0, detector_name
+
+    if len(good) < 4:
+        return None, len(good), 0.0, detector_name
+
+    pts_b = np.float32([kp2[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+    pts_a = np.float32([kp1[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+
+    try:
+        affine_mat, inliers = cv2.estimateAffinePartial2D(
+            pts_b, pts_a, method=cv2.RANSAC, ransacReprojThreshold=3.5, maxIters=2000
+        )
+        if affine_mat is not None and inliers is not None:
+            inlier_count = int(inliers.sum())
+            inlier_ratio = inlier_count / len(good)
+            if inlier_count >= 4 and inlier_ratio >= 0.20:
+                return affine_mat, len(good), inlier_ratio, detector_name
+    except Exception:
+        pass
+
+    return None, len(good), 0.0, detector_name
+
+
 def compute_alignment_quality(im1: np.ndarray, im2: np.ndarray) -> float:
     """Compute alignment score in [0.0, 1.0] using structural and correlation metrics."""
     if im1.shape != im2.shape or im1.size == 0:
@@ -180,6 +288,11 @@ def normalize_and_register_pair(
         target_w = max(16, round(src_a.width * ratio_a))
         target_h = max(16, round(src_a.height * ratio_a))
         normalized_dims = (target_w, target_h)
+        transform_matrix: list[list[float]] | None = None
+        matched_keypoints: int = 0
+        inlier_ratio: float = 0.0
+        fallback_reason: str | None = None
+        shift_x, shift_y = 0.0, 0.0
 
         # Mode 2: Both have valid CRS -> Use GIS geospatial warping / reproject
         if has_crs_a and has_crs_b and src_a.crs == src_b.crs:
@@ -202,6 +315,7 @@ def normalize_and_register_pair(
             shift_x, shift_y = 0.0, 0.0
             gray_a = _normalize_luminance(data_a[0])
             gray_b = _normalize_luminance(data_b[0])
+            alignment_score = compute_alignment_quality(gray_a, gray_b)
         else:
             # Mode 1: Standard Pixel-Space (PNG/JPG or mixed CRS)
             # Read and resize Image A
@@ -223,20 +337,61 @@ def normalize_and_register_pair(
             # Perform Phase-Correlation Registration on normalized grayscale
             gray_a = _normalize_luminance(data_a[0])
             gray_b = _normalize_luminance(data_b[0])
+            data_b_orig = data_b.copy()
 
             shift_y, shift_x, peak_corr = _compute_phase_correlation_shift(gray_a, gray_b)
 
             if abs(shift_x) > 0.5 or abs(shift_y) > 0.5:
-                # Apply registration shift across all channels of Image B
                 for ch in range(data_b.shape[0]):
                     data_b[ch] = _apply_shift(data_b[ch], shift_y, shift_x)
                 method = f"phase_correlation_shift (dx={shift_x:.1f}, dy={shift_y:.1f})"
                 gray_b = _normalize_luminance(data_b[0])
+
+                # Optional ECC Refinement
+                ecc_mat, ecc_ok = _refine_ecc(gray_a, gray_b, 0.0, 0.0)
+                if ecc_ok and ecc_mat is not None:
+                    refined_b = _warp_channels(data_b, ecc_mat, target_w, target_h)
+                    refined_gray_b = _normalize_luminance(refined_b[0])
+                    refined_score = compute_alignment_quality(gray_a, refined_gray_b)
+                    base_score = compute_alignment_quality(gray_a, gray_b)
+                    if refined_score >= base_score:
+                        data_b = refined_b
+                        gray_b = refined_gray_b
+                        method = f"phase_correlation_ecc_refined (dx={shift_x:.1f}, dy={shift_y:.1f})"
+                        transform_matrix = ecc_mat.tolist()
             else:
                 method = "direct_pixel_alignment"
 
-    # Compute genuine alignment quality using already normalized arrays
-    alignment_score = compute_alignment_quality(gray_a, gray_b)
+            # Check alignment quality
+            alignment_score = compute_alignment_quality(gray_a, gray_b)
+
+            # If alignment is poor (< 0.65), escalate to SIFT/ORB feature matching + RANSAC
+            if alignment_score < 0.65:
+                affine_mat, matched_kps, inliers_rat, det_name = _register_feature_matching(gray_a, _normalize_luminance(data_b_orig[0]))
+                if affine_mat is not None and matched_kps >= 4:
+                    candidate_b = _warp_channels(data_b_orig, affine_mat, target_w, target_h)
+                    candidate_gray_b = _normalize_luminance(candidate_b[0])
+                    candidate_score = compute_alignment_quality(gray_a, candidate_gray_b)
+
+                    if candidate_score > alignment_score:
+                        data_b = candidate_b
+                        gray_b = candidate_gray_b
+                        method = f"feature_matching_{det_name.lower()}_ransac (matches={matched_kps}, inlier_ratio={inliers_rat:.2f})"
+                        fallback_reason = (
+                            f"Initial phase correlation yielded low alignment ({alignment_score:.2f}); "
+                            f"escalated to {det_name}+RANSAC which achieved alignment score {candidate_score:.2f}."
+                        )
+                        alignment_score = candidate_score
+                        transform_matrix = affine_mat.tolist()
+                        matched_keypoints = matched_kps
+                        inlier_ratio = inliers_rat
+                    else:
+                        fallback_reason = (
+                            f"Feature matching ({det_name}) found {matched_kps} keypoint matches, "
+                            f"but candidate score ({candidate_score:.2f}) did not exceed phase correlation ({alignment_score:.2f})."
+                        )
+                else:
+                    fallback_reason = f"Feature matching ({det_name}) yielded insufficient reliable inliers; preserved phase correlation."
 
     # Determine status
     if alignment_score >= 0.70:
@@ -273,6 +428,10 @@ def normalize_and_register_pair(
         original_dims_b=dims_b,
         normalized_dims=normalized_dims,
         message=msg,
+        transform=transform_matrix,
+        matched_keypoints=matched_keypoints,
+        inlier_ratio=round(inlier_ratio, 3),
+        fallback_reason=fallback_reason,
     )
 
     # Write registration manifest for auditability
@@ -287,6 +446,10 @@ def normalize_and_register_pair(
         "original_dims_b": list(report.original_dims_b),
         "normalized_dims": list(report.normalized_dims),
         "message": report.message,
+        "transform": report.transform,
+        "matched_keypoints": report.matched_keypoints,
+        "inlier_ratio": report.inlier_ratio,
+        "fallback_reason": report.fallback_reason,
     }
     (output_dir / "registration_report.json").write_text(json.dumps(report_dict, indent=2), encoding="utf-8")
 

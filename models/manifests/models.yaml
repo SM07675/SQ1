@@ -1,0 +1,1031 @@
+version: 2.0.0
+storage_root: models
+models:
+  water_s2_surface:
+    model_id: giswqs/s2-water-unetplusplus-efficientnet-b4
+    display_name: Sentinel-2 surface water UNet++
+    path: water/s2-water-unetplusplus-efficientnet-b4
+    category: water
+    priority: six_band_s2
+    policy: PRODUCTION
+    license: CC-BY-4.0
+    source_url: https://huggingface.co/giswqs/s2-water-unetplusplus-efficientnet-b4
+    revision: efb6f636480188f48779b41f2a94bb941fd7b900
+    task: [water_segmentation, water_detection, water_area]
+    modality: [multispectral_s2]
+    expected_channels: [B02, B03, B04, B08, B11, B12]
+    input_size: [512, 512, 6]
+    output_type: pixel_water_probability
+    checkpoint: model.pth
+    notes:
+      compatibility: Named Sentinel-2 bands on a georeferenced 8-30 metre grid. Never substitute RGB channels.
+      sha256: fb8ae300b8b8e929fa764d72ac476a419e8eb9f121e52cce6c0c8816a48d487e
+  land_deepness:
+    model_id: PUTvision/Deepness-LandCoverAI-DeepLabV3plus
+    display_name: Deepness aerial land cover
+    path: landcover
+    category: landcover
+    priority: primary_aerial
+    policy: PRODUCTION
+    license: GPL-3.0 repository; model-specific terms not separately documented
+    source_url: https://qgis-plugin-deepness.readthedocs.io/en/latest/example/example_segmentation_landcover.html
+    revision: 905ac02affa45b229c45bf8bc0a082a3a7700d29
+    task: [dense_landcover_segmentation]
+    modality: [rgb_vhr]
+    expected_channels: [red, green, blue]
+    input_size: [512, 512, 3]
+    output_type: five_class_pixel_probabilities
+    checkpoint: deeplabv3_landcover_4c.onnx
+    notes:
+      compatibility: Verified 0.15-0.60 metre RGB pixels; geography unvalidated.
+      class_map: [unknown, building, woodland, water, road]
+      sha256: 3c82806dfe6a582ba26642427ef5533595981ec2bb6d4d3a3c4a3f06ac4753c4
+  building_satellite:
+    model_id: merve/rf-detr-seg-satellite-buildings
+    display_name: RF-DETR satellite building instances
+    path: buildings/rf-detr-seg-satellite-buildings
+    category: buildings
+    priority: default_satellite
+    policy: PRODUCTION
+    license: Apache-2.0
+    source_url: https://huggingface.co/merve/rf-detr-seg-satellite-buildings
+    revision: 05b80dce9a57701724ad6a0fc052827c8b724257
+    checkpoint: model.safetensors
+    task: [building_detection, building_footprint, building_count, building_grounding]
+    modality: [rgb]
+    expected_channels: [red, green, blue]
+    input_size: [432, 432, 3]
+    output_type: instance_masks_and_scores
+    notes:
+      compatibility: VHR RGB satellite imagery; target geography unvalidated; rejects pixels coarser than 1.5 m.
+      selection: Best of three measured satellite candidates on 16 previously inspected images. Not independently validated for arbitrary aerial images.
+      sha256: f254c1400f780f7ea72a6bc588a2150bf8b4d8845ded7269655e26a275f41ac7
+  building_primary:
+    model_id: satquery_buildings_bundle
+    display_name: SatQuery Satlas Buildings v1
+    base_model: AI2 SatlasPretrain Aerial_SwinB_SI
+    version: 1.0.0
+    training_dataset: SpaceNet 2 (Vegas/Shanghai train, Paris validation, Khartoum
+      test)
+    policy: CANDIDATE
+    threshold_file: thresholds.json
+    path: finetuned/buildings/satquery_buildings_v1
+    category: buildings
+    priority: explicit_bundle_override
+    status: READY
+    license: CC-BY-4.0
+    source_url: models/satquery_buildings_bundle
+    task:
+    - building_detection
+    - building_footprint
+    - building_count
+    - building_grounding
+    modality:
+    - rgb
+    expected_channels:
+    - red
+    - green
+    - blue
+    input_size:
+    - 512
+    - 512
+    - 3
+    output_type: footprint_and_boundary_probabilities
+    notes:
+      default_window_size: '512'
+      default_stride: '384'
+      default_overlap: '128'
+      default_foot_thr: '0.6'
+      default_boundary_thr: '0.6'
+      method: Hann blend then global watershed
+      backbone: Aerial_SwinB_SI
+      fine_tuned_on: SpaceNet 2
+    checkpoint: satquery_buildings_state_dict.pt
+    health_status: READY
+  water_finetuned:
+    model_id: satquery_water_bundle
+    display_name: SatQuery Satlas Sentinel-2 Water v1
+    base_model: AI2 SatlasPretrain Sentinel2_SwinB_SI_MS
+    version: 1.0.0
+    training_dataset: Sen1Floods11 with event-exclusive splits and shadow hard negatives
+    policy: PRODUCTION
+    threshold_file: thresholds.json
+    path: satquery_water_bundle
+    category: water
+    priority: primary_water_s2
+    status: READY
+    task:
+    - water_segmentation
+    - water_detection
+    - water_area
+    - water_grounding
+    modality:
+    - multispectral_s2
+    expected_channels:
+    - B02
+    - B03
+    - B04
+    - B05
+    - B06
+    - B07
+    - B08
+    - B10
+    - B11
+    - B12
+    input_size:
+    - 512
+    - 512
+    - 10
+    output_type: pixel_surface_water_probability
+    notes:
+      compatibility: Exact Sentinel-2 bands only; 9-band Satlas backbone plus a six-feature
+        spectral branch. Never use on RGB or SAR.
+      backbone_band_order:
+      - B04
+      - B03
+      - B02
+      - B05
+      - B06
+      - B07
+      - B08
+      - B11
+      - B12
+      spectral_features:
+      - NDWI
+      - MNDWI
+      - NDVI
+      - AWEI_shadow
+      - visible_brightness
+      - B10_cirrus
+      shadow_contract: The checkpoint predicts surface water only. Shadow is produced
+        independently by the illumination engine.
+    health_status: READY
+  building_secondary:
+    model_id: geobase/building-detection
+    path: buildings/geobase-building-detection
+    category: buildings
+    priority: secondary
+    status: READY
+    license: CC-BY-4.0
+    source_url: https://huggingface.co/geobase/building-detection
+    task:
+    - building_validation
+    - secondary_building_check
+    modality:
+    - rgb
+    expected_channels: &id001
+    - red
+    - green
+    - blue
+    input_size:
+    - 256
+    - 256
+    - 3
+    output_type: building_detection_logits
+    notes:
+      role: Secondary/validation building model. Do not make default until benchmark
+        proves improvement.
+    display_name: Building Secondary
+    download_status: UNVERIFIED
+    channel_order: *id001
+    checkpoint: onnx/model_quantized.onnx
+    revision: null
+    health_status: READY
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  land_rgb:
+    model_id: IGNF/FLAIR-INC_rgb_15cl_resnet34-deeplabv3
+    path: land_cover/flair-rgb-15cl-deeplabv3
+    category: land_cover
+    priority: primary
+    status: READY
+    license: Etalab-2.0
+    source_url: https://huggingface.co/IGNF/FLAIR-INC_rgb_15cl_resnet34-deeplabv3
+    task:
+    - land_cover_segmentation
+    - pixel_land_cover_rgb
+    modality:
+    - rgb
+    expected_channels: &id002
+    - red
+    - green
+    - blue
+    input_size:
+    - 512
+    - 512
+    - 3
+    output_type: 15_class_pixel_probabilities
+    notes:
+      compatibility: High-resolution RGB imagery only (0.2m-0.5m GSD). Do NOT apply
+        to SAR or coarse multispectral tensors.
+      classes:
+      - building
+      - pervious_surface
+      - impervious_surface
+      - bare_soil
+      - water
+      - coniferous
+      - deciduous
+      - brushwood
+      - vineyard
+      - herbaceous_vegetation
+      - agricultural_land
+      - plowed_land
+      - swimming_pool
+      - greenhouse
+      - other
+    display_name: Land Rgb
+    download_status: UNVERIFIED
+    channel_order: *id002
+    checkpoint: FLAIR-INC_rgb_15cl_resnet34-deeplabv3_weights.pth
+    revision: null
+    health_status: READY
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  land_s2:
+    model_id: BIFOLD-BigEarthNetv2-0/resnet50-s2-v0.2.0
+    path: pretrained/bigearthnet/s2-resnet50
+    category: land_cover
+    priority: primary_s2
+    status: DEGRADED
+    license: MIT
+    source_url: https://huggingface.co/BIFOLD-BigEarthNetv2-0/resnet50-s2-v0.2.0
+    task:
+    - scene_level_land_cover_s2
+    - sanity_evidence
+    modality:
+    - multispectral_s2
+    expected_channels: &id003
+    - B02
+    - B03
+    - B04
+    - B05
+    - B06
+    - B07
+    - B08
+    - B8A
+    - B11
+    - B12
+    input_size:
+    - 120
+    - 120
+    - 10
+    output_type: 19_class_multilabel_probabilities
+    notes:
+      role: Scene-level land cover classification. DO NOT use as pixel segmentation.
+      channel_ordering: 'reBEN v0.2.0 exact 10 Sentinel-2 bands: B02, B03, B04, B05,
+        B06, B07, B08, B8A, B11, B12. Never mix with v0.1.1 band mappings.'
+    display_name: Land S2
+    download_status: UNVERIFIED
+    channel_order: *id003
+    checkpoint: model.safetensors
+    revision: null
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  land_s1:
+    model_id: BIFOLD-BigEarthNetv2-0/resnet50-s1-v0.2.0
+    path: pretrained/bigearthnet/s1-resnet50
+    category: land_cover
+    priority: primary_s1
+    status: DEGRADED
+    license: MIT
+    source_url: https://huggingface.co/BIFOLD-BigEarthNetv2-0/resnet50-s1-v0.2.0
+    task:
+    - scene_level_land_cover_s1
+    - sar_evidence
+    modality:
+    - sar_s1
+    expected_channels: &id004
+    - VH
+    - VV
+    input_size:
+    - 120
+    - 120
+    - 2
+    output_type: 19_class_multilabel_probabilities
+    notes:
+      role: Sentinel-1 SAR scene-level land cover evidence.
+      channel_ordering: 'reBEN v0.2.0 exact 2 SAR channels: [VH, VV].'
+    display_name: Land S1
+    download_status: UNVERIFIED
+    channel_order: *id004
+    checkpoint: model.safetensors
+    revision: null
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  land_s1s2:
+    model_id: BIFOLD-BigEarthNetv2-0/resnet101-all-v0.2.0
+    path: pretrained/bigearthnet/s1s2-resnet101
+    category: land_cover
+    priority: primary_joint
+    status: DEGRADED
+    license: MIT
+    source_url: https://huggingface.co/BIFOLD-BigEarthNetv2-0/resnet101-all-v0.2.0
+    task:
+    - scene_level_land_cover_joint
+    modality:
+    - optical_sar_joint
+    expected_channels: &id005
+    - VH
+    - VV
+    - B02
+    - B03
+    - B04
+    - B05
+    - B06
+    - B07
+    - B08
+    - B8A
+    - B11
+    - B12
+    input_size:
+    - 120
+    - 120
+    - 12
+    output_type: 19_class_multilabel_probabilities
+    notes:
+      role: Joint Sentinel-1 + Sentinel-2 scene-level classification. Only execute
+        when exact required 12 S1/S2 channels exist.
+    display_name: Land S1S2
+    download_status: UNVERIFIED
+    channel_order: *id005
+    checkpoint: model.safetensors
+    revision: null
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  water_s2:
+    model_id: GNSFoundation/Prithvi-EO-2.0-300M-TL-Sen1Floods11
+    path: pretrained/water/prithvi-sen1floods11
+    category: water
+    priority: primary_water_s2
+    status: DEGRADED
+    license: Apache-2.0
+    source_url: https://huggingface.co/GNSFoundation/Prithvi-EO-2.0-300M-TL-Sen1Floods11
+    task:
+    - water_segmentation
+    - flood_mapping_s2
+    modality:
+    - multispectral_s2
+    expected_channels: &id006
+    - Blue
+    - Green
+    - Red
+    - Narrow NIR
+    - SWIR1
+    - SWIR2
+    input_size:
+    - 512
+    - 512
+    - 6
+    output_type: pixel_water_probability_and_classes
+    notes:
+      channel_safety: 'Expects 6 Sentinel-2 bands: Blue, Green, Red, Narrow NIR, SWIR1,
+        SWIR2. Do NOT use for arbitrary RGB images.'
+      routing_fallback: If imagery lacks required bands, route to alternative spectral
+        water proxy.
+    display_name: Water S2
+    download_status: UNVERIFIED
+    channel_order: *id006
+    checkpoint: Prithvi-EO-V2-300M-TL-Sen1Floods11.pt
+    revision: null
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  grounding_dino:
+    model_id: IDEA-Research/grounding-dino-tiny
+    path: grounding/grounding-dino
+    category: grounding
+    priority: optional
+    status: DEGRADED
+    license: Apache-2.0
+    source_url: https://huggingface.co/IDEA-Research/grounding-dino-tiny
+    task:
+    - open_vocabulary_object_grounding
+    - bounding_box_detection
+    modality:
+    - rgb
+    expected_channels: &id007
+    - red
+    - green
+    - blue
+    input_size:
+    - 800
+    - 800
+    - 3
+    output_type: bounding_boxes_and_phrase_scores
+    display_name: Grounding Dino
+    download_status: MISSING
+    channel_order: *id007
+    checkpoint: null
+    revision: null
+    notes: {}
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  sam2:
+    model_id: facebook/sam2-hiera-tiny
+    path: grounding/sam2
+    category: grounding
+    priority: optional
+    status: DEGRADED
+    license: Apache-2.0
+    source_url: https://huggingface.co/facebook/sam2-hiera-tiny
+    task:
+    - mask_refinement
+    - interactive_segmentation
+    modality:
+    - rgb
+    expected_channels: &id008
+    - red
+    - green
+    - blue
+    input_size:
+    - 1024
+    - 1024
+    - 3
+    output_type: binary_mask_refinements
+    display_name: Sam2
+    download_status: MISSING
+    channel_order: *id008
+    checkpoint: null
+    revision: null
+    notes: {}
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  earthdial:
+    model_id: akshaydudhane/EarthDial_4B
+    path: vlm/earthdial-4b/EarthDial_4B_RGB
+    category: vlm
+    priority: primary_vlm
+    status: CORRUPT
+    license: Research/Academic
+    source_url: https://huggingface.co/akshaydudhane/EarthDial_4B_RGB
+    task:
+    - scene_description
+    - natural_language_explanation
+    modality:
+    - rgb
+    - multispectral
+    expected_channels: &id009
+    - red
+    - green
+    - blue
+    input_size:
+    - 448
+    - 448
+    - 3
+    output_type: natural_language_explanation
+    display_name: Earthdial
+    download_status: UNVERIFIED
+    channel_order: *id009
+    checkpoint: config.json
+    revision: null
+    notes: {}
+    health_status: CORRUPT
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  remoteclip_rn50:
+    model_id: chendelong/RemoteCLIP-RN50
+    path: remoteclip/rn50
+    category: remoteclip
+    priority: primary_retrieval
+    status: DEGRADED
+    license: CC-BY-NC-4.0
+    source_url: https://huggingface.co/chendelong/RemoteCLIP
+    task:
+    - semantic_retrieval
+    - zero_shot_classification
+    modality:
+    - rgb
+    expected_channels: &id010
+    - red
+    - green
+    - blue
+    input_size:
+    - 224
+    - 224
+    - 3
+    output_type: feature_embedding_1024d
+    display_name: Remoteclip Rn50
+    download_status: UNVERIFIED
+    channel_order: *id010
+    checkpoint: RemoteCLIP-RN50.pt
+    revision: null
+    notes: {}
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  remoteclip_vit_b_32:
+    model_id: chendelong/RemoteCLIP-ViT-B-32
+    path: remoteclip/vit-b-32
+    category: remoteclip
+    priority: secondary_retrieval
+    status: DEGRADED
+    license: CC-BY-NC-4.0
+    source_url: https://huggingface.co/chendelong/RemoteCLIP
+    task:
+    - semantic_retrieval
+    - zero_shot_classification
+    modality:
+    - rgb
+    expected_channels: &id011
+    - red
+    - green
+    - blue
+    input_size:
+    - 224
+    - 224
+    - 3
+    output_type: feature_embedding_512d
+    display_name: Remoteclip Vit B 32
+    download_status: UNVERIFIED
+    channel_order: *id011
+    checkpoint: RemoteCLIP-ViT-B-32.pt
+    revision: null
+    notes: {}
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  croma_base:
+    model_id: antofuller/CROMA_base
+    path: fusion/croma
+    category: fusion
+    priority: primary_fusion
+    status: DEGRADED
+    license: MIT
+    source_url: https://github.com/antofuller/CROMA
+    task:
+    - optical_sar_joint_representation
+    - feature_extraction
+    modality:
+    - optical_sar
+    expected_channels: &id012
+    - SAR_VH
+    - SAR_VV
+    - B01
+    - B02
+    - B03
+    - B04
+    - B05
+    - B06
+    - B07
+    - B08
+    - B8A
+    - B09
+    - B11
+    - B12
+    input_size:
+    - 120
+    - 120
+    - 14
+    output_type: multimodal_embeddings
+    display_name: Croma Base
+    download_status: UNVERIFIED
+    channel_order: *id012
+    checkpoint: CROMA_base.pt
+    revision: null
+    notes: {}
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  tinycd:
+    model_id: AndreaCodegoni/Tiny_model_4_CD
+    path: change_detection/tinycd
+    category: change_detection
+    priority: primary_change
+    status: READY
+    license: Non-commercial / Research
+    source_url: https://github.com/AndreaCodegoni/Tiny_model_4_CD
+    task:
+    - bitemporal_change_detection
+    modality:
+    - optical_bitemporal
+    expected_channels: &id013
+    - red
+    - green
+    - blue
+    input_size:
+    - 256
+    - 256
+    - 3
+    output_type: binary_change_probability
+    display_name: Tinycd
+    download_status: UNVERIFIED
+    channel_order: *id013
+    checkpoint: levir_best.pth
+    revision: null
+    notes: {}
+    health_status: READY
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  bit:
+    model_id: likyoo/Open-CD_Model_Zoo/bit
+    path: change_detection/bit
+    category: change_detection
+    priority: secondary_change
+    status: DEGRADED
+    license: Apache-2.0
+    source_url: https://huggingface.co/likyoo/Open-CD_Model_Zoo
+    task:
+    - bitemporal_change_detection
+    modality:
+    - optical_bitemporal
+    expected_channels: &id014
+    - red
+    - green
+    - blue
+    input_size:
+    - 256
+    - 256
+    - 3
+    output_type: binary_change_mask
+    display_name: Bit
+    download_status: UNVERIFIED
+    channel_order: *id014
+    checkpoint: bit_r18_256x256_40k_levircd.pth
+    revision: null
+    notes: {}
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  changerex:
+    model_id: likyoo/Open-CD_Model_Zoo/changerex
+    path: change_detection/changerex
+    category: change_detection
+    priority: secondary_change
+    status: DEGRADED
+    license: Apache-2.0
+    source_url: https://huggingface.co/likyoo/Open-CD_Model_Zoo
+    task:
+    - bitemporal_change_detection
+    modality:
+    - optical_bitemporal
+    expected_channels: &id015
+    - red
+    - green
+    - blue
+    input_size:
+    - 512
+    - 512
+    - 3
+    output_type: binary_change_mask
+    display_name: Changerex
+    download_status: UNVERIFIED
+    channel_order: *id015
+    checkpoint: ChangerEx_r18-512x512_40k_levircd.pth
+    revision: null
+    notes: {}
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  ban:
+    model_id: likyoo/Open-CD_Model_Zoo/ban
+    path: change_detection/ban
+    category: change_detection
+    priority: secondary_change
+    status: DEGRADED
+    license: Apache-2.0
+    source_url: https://huggingface.co/likyoo/Open-CD_Model_Zoo
+    task:
+    - bitemporal_change_detection
+    modality:
+    - optical_bitemporal
+    expected_channels: &id016
+    - red
+    - green
+    - blue
+    input_size:
+    - 512
+    - 512
+    - 3
+    output_type: binary_change_mask
+    display_name: Ban
+    download_status: UNVERIFIED
+    channel_order: *id016
+    checkpoint: ban_vit-l14-clip_mit-b0_512x512_40k_levircd.pth
+    revision: null
+    notes: {}
+    health_status: DEGRADED
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  changemamba:
+    model_id: ChenHongruixuan/ChangeMamba
+    path: change_detection/changemamba
+    category: change_detection
+    priority: research_change
+    status: MISSING
+    license: Academic / Research
+    source_url: https://github.com/ChenHongruixuan/ChangeMamba
+    task:
+    - ssm_change_detection
+    modality:
+    - optical_bitemporal
+    expected_channels: &id017
+    - red
+    - green
+    - blue
+    input_size:
+    - 256
+    - 256
+    - 3
+    output_type: binary_change_mask
+    notes:
+      status_on_windows: UNAVAILABLE_ON_WINDOWS
+      reason: Requires Linux and custom compiled CUDA selective_scan kernels. Zenodo
+        checkpoints 14037769.
+    display_name: Changemamba
+    download_status: UNVERIFIED
+    channel_order: *id017
+    checkpoint: README.md
+    revision: null
+    health_status: MISSING
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+  satlas_aerial_swinb_si:
+    model_id: allenai/satlas-pretrain
+    display_name: Satlas Aerial Swinb Si
+    path: pretrained/buildings/satlas-aerial-swinb-si
+    category: buildings
+    priority: foundation
+    download_status: UNVERIFIED
+    license: Apache-2.0
+    source_url: https://github.com/allenai/satlaspretrain_models
+    task:
+    - building_backbone
+    modality:
+    - rgb_vhr
+    expected_channels: &id018
+    - red
+    - green
+    - blue
+    channel_order: *id018
+    input_size:
+    - 512
+    - 512
+    - 3
+    output_type: multiscale_features_no_task_head
+    checkpoint: aerial_swinb_si.pth
+    revision: b1f8de04dacf9f9ed9640fe32484947710b47ede
+    notes:
+      checkpoint_id: Aerial_SwinB_SI
+      requires_task_head: true
+    health_status: READY
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+    status: READY
+  land_flair_hub:
+    model_id: IGNF/FLAIR-HUB_LC-A_RGB_swinbase-upernet
+    display_name: Land Flair Hub
+    path: pretrained/landcover/flair-hub-rgb-swinbase-upernet
+    category: landcover
+    priority: baseline
+    download_status: UNVERIFIED
+    license: Etalab-2.0
+    source_url: https://huggingface.co/IGNF/FLAIR-HUB_LC-A_RGB_swinbase-upernet
+    task:
+    - dense_landcover_segmentation
+    modality:
+    - rgb_vhr
+    expected_channels: &id019
+    - red
+    - green
+    - blue
+    channel_order: *id019
+    input_size:
+    - 512
+    - 512
+    - 3
+    output_type: 19_channel_pixel_logits_15_evaluated_classes
+    checkpoint: FLAIR-HUB_LC-A_RGB_swinbase-upernet.safetensors
+    revision: 88190fc26a325509a78e4a7289e2ab6a8f5d58a4
+    notes:
+      class_map_source: configs_train/config_supervision.yaml
+      ignored_class_ids:
+      - 15
+      - 16
+      - 17
+      - 18
+    health_status: READY
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+    status: READY
+  building_fallback:
+    model_id: geobase/dinov3s-buildings
+    display_name: Building Fallback
+    path: pretrained/buildings/dinov3s-buildings
+    category: buildings
+    priority: fallback
+    download_status: UNVERIFIED
+    license: CC-BY-4.0; DINOv3 backbone subject to separate license
+    source_url: https://huggingface.co/geobase/dinov3s-buildings
+    task:
+    - building_detection
+    - building_footprint
+    - building_count
+    - building_grounding
+    modality:
+    - rgb
+    expected_channels: &id020
+    - red
+    - green
+    - blue
+    channel_order: *id020
+    input_size:
+    - 256
+    - 256
+    - 3
+    output_type: per_pixel_building_probability
+    checkpoint: onnx/model.onnx
+    revision: null
+    notes:
+      default_window_size: 256
+      default_stride: 192
+      default_threshold: 0.4371
+      threshold_note: Documented initial default. Subject to empirical benchmark tuning.
+    health_status: READY
+    normalization:
+      type: checkpoint_native
+    input_range: checkpoint_native
+    expected_resolution: see model card
+    class_map: null
+    threshold_file: null
+    device_preference: auto
+    precision: float32
+    fallbacks: []
+    status: READY
+  landcover_candidate:
+    model_id: satquery_landcover_v1
+    display_name: SatQuery Land Cover v1 candidate
+    path: finetuned/landcover/satquery_landcover_v1
+    task:
+    - dense_landcover_segmentation
+    modality:
+    - rgb_vhr
+    expected_channels:
+    - red
+    - green
+    - blue
+    policy: CANDIDATE
+    priority: candidate
+    health_status: READY
+    notes:
+      reason: Bundle README reports a bounded toy validation run; independent target-domain
+        promotion gate has not passed.
+    status: READY
+  water_shadow_rgb:
+    model_id: satquery_water_shadow_v1
+    display_name: SatQuery RGB Water and Shadow v1
+    path: finetuned/water/satquery_water_shadow_v1
+    task:
+    - water_segmentation
+    - shadow_segmentation
+    modality:
+    - rgb_vhr
+    expected_channels:
+    - red
+    - green
+    - blue
+    policy: CANDIDATE
+    priority: primary_when_validated
+    health_status: READY
+    notes:
+      reason: The existing SatQuery water bundle is Sentinel-2 water only; it is not
+        this checkpoint.
+    status: READY

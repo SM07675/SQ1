@@ -1,0 +1,27 @@
+{
+  "inference_verified": true,
+  "checkpoint_sha256": "93e065da2f6f12644ae0543bc5ec434fdb66d53b7a41445793b71fb9568809a2",
+  "verified_at": "2026-09-23T19:03:36.660283+00:00",
+  "output_shape": [
+    1,
+    2,
+    512,
+    512
+  ],
+  "device": "cuda",
+  "peak_allocated_vram_bytes": 712585216,
+  "class_map": [
+    "footprint_logit",
+    "boundary_logit"
+  ],
+  "test_metrics": {
+    "instance_precision@0.5": 0.26899128268991285,
+    "instance_recall@0.5": 0.3847524047025294,
+    "instance_f1@0.5": 0.316622691292876,
+    "semantic_iou": 0.5640286791799946,
+    "matched_instance_iou": 0.703252234277682,
+    "count_mae": 13.616666666666667,
+    "count_relative_error": 0.6988038828705955,
+    "tiles": 120
+  }
+}

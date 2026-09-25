@@ -1,0 +1,9 @@
+{
+  "checkpoint_id": "Aerial_SwinB_SI",
+  "official_url": "https://huggingface.co/allenai/satlas-pretrain/resolve/main/aerial_swinb_si.pth?download=true",
+  "repository_revision": "b1f8de04dacf9f9ed9640fe32484947710b47ede",
+  "package": "satlaspretrain-models",
+  "input_channels": 3,
+  "multi_image": false,
+  "task_head": "none; foundation features only"
+}

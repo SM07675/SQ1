@@ -1,0 +1,103 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              55.0,
+              2.0
+            ],
+            [
+              55.0,
+              3.0
+            ],
+            [
+              95.0,
+              3.0
+            ],
+            [
+              95.0,
+              2.0
+            ],
+            [
+              55.0,
+              2.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "road",
+        "area_m2": null,
+        "pixel_area": 40.0,
+        "bbox": [
+          55.0,
+          2.0,
+          95.0,
+          3.0
+        ],
+        "rank": 1,
+        "is_largest": true
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              0.0,
+              1.0
+            ],
+            [
+              0.0,
+              5.0
+            ],
+            [
+              1.0,
+              5.0
+            ],
+            [
+              1.0,
+              2.0
+            ],
+            [
+              2.0,
+              2.0
+            ],
+            [
+              2.0,
+              1.0
+            ],
+            [
+              0.0,
+              1.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "road",
+        "area_m2": null,
+        "pixel_area": 5.0,
+        "bbox": [
+          0.0,
+          1.0,
+          2.0,
+          5.0
+        ],
+        "rank": 2,
+        "is_largest": false
+      }
+    }
+  ],
+  "properties": {
+    "crs": null,
+    "producer": "spectral_toolkit_v2"
+  }
+}

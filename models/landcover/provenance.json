@@ -1,0 +1,10 @@
+{
+  "repository": "PUTvision/qgis-plugin-deepness",
+  "revision": "905ac02affa45b229c45bf8bc0a082a3a7700d29",
+  "url": "https://raw.githubusercontent.com/PUTvision/qgis-plugin-deepness/905ac02affa45b229c45bf8bc0a082a3a7700d29/examples/deeplabv3_segmentation_landcover/deeplabv3_landcover_4c.onnx",
+  "sha256": "3c82806dfe6a582ba26642427ef5533595981ec2bb6d4d3a3c4a3f06ac4753c4",
+  "bytes": 12336439,
+  "source_documentation": "https://qgis-plugin-deepness.readthedocs.io/en/latest/example/example_segmentation_landcover.html",
+  "license": "GPL-3.0 repository; model-specific license not separately documented",
+  "status": "evaluation_only"
+}

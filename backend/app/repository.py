@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ class Repository:
     def _connect(self) -> sqlite3.Connection:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self.database_path)
+        connection.execute("PRAGMA foreign_keys = ON;")
         connection.row_factory = sqlite3.Row
         return connection
 
@@ -62,6 +64,42 @@ class Repository:
                     ON evidence_geometries(min_x, min_y, max_x, max_y);
                 CREATE INDEX IF NOT EXISTS idx_evidence_geom_result
                     ON evidence_geometries(result_id);
+
+                CREATE TABLE IF NOT EXISTS chats (
+                    chat_id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_chats_updated
+                    ON chats(updated_at DESC);
+
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    message_id TEXT PRIMARY KEY,
+                    chat_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    attachments_json TEXT NOT NULL,
+                    result_json TEXT,
+                    FOREIGN KEY(chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_chat_messages_chat
+                    ON chat_messages(chat_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS chat_images (
+                    image_id TEXT PRIMARY KEY,
+                    chat_id TEXT NOT NULL,
+                    filename TEXT NOT NULL,
+                    storage_path TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(chat_id) REFERENCES chats(chat_id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_chat_images_chat
+                    ON chat_images(chat_id);
                 """
             )
 
@@ -105,7 +143,10 @@ class Repository:
             self._index_output_geometries(result_id, output_dir, created_at)
 
     def _index_output_geometries(self, result_id: str, output_dir: Path, created_at: str) -> None:
-        geojson_files = list(output_dir.glob("*.geojson")) + list(output_dir.glob("*/*.geojson"))
+        # Analysis producers may place evidence several directories below the run root.
+        geojson_files = sorted(output_dir.rglob("*.geojson"))
+        with self._connect() as db:
+            db.execute("DELETE FROM evidence_geometries WHERE result_id = ?", (result_id,))
         for gfile in geojson_files:
             try:
                 data = json.loads(gfile.read_text(encoding="utf-8"))
@@ -242,4 +283,196 @@ class Repository:
                 "geometries_count": row["geometries_count"],
             }
             for row in rows
+        ]
+
+    # =========================================================================
+    # Conversation / Chat Persistence Methods
+    # =========================================================================
+
+    def create_chat(
+        self,
+        chat_id: str,
+        title: str,
+        metadata: dict[str, Any] | None = None,
+        created_at: str | None = None,
+    ) -> dict[str, Any]:
+        now = created_at or datetime.now(UTC).isoformat()
+        meta = metadata or {}
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO chats(chat_id, title, created_at, updated_at, metadata_json) VALUES(?,?,?,?,?)",
+                (chat_id, title, now, now, json.dumps(meta)),
+            )
+        return {
+            "chat_id": chat_id,
+            "title": title,
+            "created_at": now,
+            "updated_at": now,
+            "metadata": meta,
+        }
+
+    def update_chat(
+        self,
+        chat_id: str,
+        title: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        updated_at: str | None = None,
+    ) -> bool:
+        now = updated_at or datetime.now(UTC).isoformat()
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM chats WHERE chat_id=?", (chat_id,)).fetchone()
+            if row is None:
+                return False
+            curr_title = title if title is not None else row["title"]
+            curr_meta = metadata if metadata is not None else json.loads(row["metadata_json"])
+            db.execute(
+                "UPDATE chats SET title=?, updated_at=?, metadata_json=? WHERE chat_id=?",
+                (curr_title, now, json.dumps(curr_meta), chat_id),
+            )
+        return True
+
+    def get_chat(self, chat_id: str) -> dict[str, Any] | None:
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM chats WHERE chat_id=?", (chat_id,)).fetchone()
+            if row is None:
+                return None
+            return {
+                "chat_id": row["chat_id"],
+                "title": row["title"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "metadata": json.loads(row["metadata_json"]),
+            }
+
+    def list_chats(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                """
+                SELECT c.chat_id, c.title, c.created_at, c.updated_at, c.metadata_json,
+                       (SELECT content FROM chat_messages WHERE chat_id=c.chat_id ORDER BY created_at DESC LIMIT 1) as last_message,
+                       (SELECT COUNT(*) FROM chat_messages WHERE chat_id=c.chat_id) as message_count,
+                       (SELECT COUNT(*) FROM chat_images WHERE chat_id=c.chat_id) as image_count
+                FROM chats c
+                ORDER BY c.updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [
+            {
+                "chat_id": r["chat_id"],
+                "title": r["title"],
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"],
+                "last_message": r["last_message"],
+                "message_count": r["message_count"],
+                "image_count": r["image_count"],
+                "metadata": json.loads(r["metadata_json"]),
+            }
+            for r in rows
+        ]
+
+    def delete_chat(self, chat_id: str) -> bool:
+        with self._connect() as db:
+            res = db.execute("DELETE FROM chats WHERE chat_id=?", (chat_id,))
+            return res.rowcount > 0
+
+    def add_chat_message(
+        self,
+        message_id: str,
+        chat_id: str,
+        role: str,
+        content: str,
+        attachments: list[dict[str, Any]] | None = None,
+        result: dict[str, Any] | None = None,
+        created_at: str | None = None,
+    ) -> dict[str, Any]:
+        now = created_at or datetime.now(UTC).isoformat()
+        att_json = json.dumps(attachments or [])
+        res_json = json.dumps(result) if result is not None else None
+        with self._connect() as db:
+            db.execute(
+                """
+                INSERT INTO chat_messages(message_id, chat_id, role, content, created_at, attachments_json, result_json)
+                VALUES(?,?,?,?,?,?,?)
+                """,
+                (message_id, chat_id, role, content, now, att_json, res_json),
+            )
+            db.execute("UPDATE chats SET updated_at=? WHERE chat_id=?", (now, chat_id))
+        return {
+            "message_id": message_id,
+            "chat_id": chat_id,
+            "role": role,
+            "content": content,
+            "created_at": now,
+            "attachments": attachments or [],
+            "result": result,
+        }
+
+    def get_chat_messages(self, chat_id: str) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT * FROM chat_messages WHERE chat_id=? ORDER BY created_at ASC",
+                (chat_id,),
+            ).fetchall()
+        return [
+            {
+                "message_id": r["message_id"],
+                "chat_id": r["chat_id"],
+                "role": r["role"],
+                "content": r["content"],
+                "created_at": r["created_at"],
+                "attachments": json.loads(r["attachments_json"]),
+                "result": json.loads(r["result_json"]) if r["result_json"] else None,
+            }
+            for r in rows
+        ]
+
+    def add_chat_image(
+        self,
+        image_id: str,
+        chat_id: str,
+        filename: str,
+        storage_path: Path,
+        url: str,
+        metadata: dict[str, Any] | None = None,
+        created_at: str | None = None,
+    ) -> dict[str, Any]:
+        now = created_at or datetime.now(UTC).isoformat()
+        meta = metadata or {}
+        with self._connect() as db:
+            db.execute(
+                """
+                INSERT INTO chat_images(image_id, chat_id, filename, storage_path, url, metadata_json, created_at)
+                VALUES(?,?,?,?,?,?,?)
+                """,
+                (image_id, chat_id, filename, str(storage_path.resolve()), url, json.dumps(meta), now),
+            )
+        return {
+            "image_id": image_id,
+            "chat_id": chat_id,
+            "filename": filename,
+            "storage_path": str(storage_path.resolve()),
+            "url": url,
+            "metadata": meta,
+            "created_at": now,
+        }
+
+    def get_chat_images(self, chat_id: str) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT * FROM chat_images WHERE chat_id=? ORDER BY created_at ASC",
+                (chat_id,),
+            ).fetchall()
+        return [
+            {
+                "image_id": r["image_id"],
+                "chat_id": r["chat_id"],
+                "filename": r["filename"],
+                "storage_path": r["storage_path"],
+                "url": r["url"],
+                "metadata": json.loads(r["metadata_json"]),
+                "created_at": r["created_at"],
+            }
+            for r in rows
         ]

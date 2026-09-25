@@ -1,0 +1,299 @@
+{
+  "result_id": "a60c0dc0",
+  "task_plan": {
+    "task": "vegetation_analysis",
+    "application": "single_image",
+    "specific_task": "vegetation_analysis",
+    "sub_tasks": [
+      "vegetation_analysis"
+    ],
+    "multi_intent": false,
+    "target": "vegetation",
+    "asks_direction": false,
+    "tools": [
+      "raster_validator",
+      "ndvi_spectral_engine",
+      "canopy_grounding_engine",
+      "earthdial_4b_rgb",
+      "geoproof_arbiter"
+    ],
+    "reason": "Natural language request asks for vegetation distribution and canopy analysis.",
+    "aoi_text": null,
+    "years": []
+  },
+  "mode": "deterministic_geospatial",
+  "assets": [
+    {
+      "filename": "sample.tif",
+      "width": 256,
+      "height": 256,
+      "bands": 3,
+      "dtype": "uint8",
+      "crs": "EPSG:3857",
+      "bounds": [
+        0.0,
+        0.0,
+        2560.0,
+        2560.0
+      ],
+      "resolution": [
+        10.0,
+        10.0
+      ],
+      "nodata": null,
+      "nodata_percent": 0.0,
+      "band_names": [
+        "band_1",
+        "band_2",
+        "band_3"
+      ],
+      "available_indices": [],
+      "source_format": "raster"
+    }
+  ],
+  "quality": {
+    "score": 0.96,
+    "compatible": true,
+    "blockers": [],
+    "warnings": [
+      "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+    ],
+    "checks": {
+      "file_count": 1,
+      "geospatial": true
+    }
+  },
+  "evidence": [
+    {
+      "kind": "vegetation_grounding_evidence",
+      "producer": "optical_semantic_vegetation_engine_v1",
+      "summary": "Delineated forest across 2.41% of the scene (pixel-space area) across 1 distinct region(s) [semantic]. Spectral NDVI cannot be reliably computed from the supplied image because the required spectral bands are unavailable. Forest canopy was delineated using semantic land cover classification: 2.41% scene coverage.",
+      "confidence": 0.84,
+      "artifact_url": "/artifacts/a60c0dc0/forest_dl_grounding.png",
+      "metrics": {
+        "target": "forest",
+        "coverage_percent": 2.41,
+        "total_area_m2": null,
+        "region_count": 1,
+        "result_type": "semantic",
+        "mean_ndvi": null,
+        "note": ""
+      },
+      "supports_claim": true,
+      "confidence_source": "producer_score"
+    },
+    {
+      "kind": "remoteclip_tile_retrieval",
+      "producer": "remoteclip_semantic_grounding_v2",
+      "summary": "Evaluated 1 candidate blocks; no block met the semantic relevance threshold (0.70). Safe abstention triggered.",
+      "confidence": 0.35,
+      "artifact_url": "/artifacts/a60c0dc0/tile_retrieval/remoteclip_top_tiles_mosaic.png",
+      "metrics": {
+        "total_candidate_tiles": 1,
+        "relevant_matching_regions": 0,
+        "excluded_regions": 1,
+        "relevance_threshold": 0.7,
+        "mean_similarity": 0.0,
+        "max_similarity": 0.594
+      },
+      "supports_claim": false,
+      "confidence_source": "producer_score"
+    }
+  ],
+  "verdict": {
+    "status": "supported",
+    "answer": "Forest covers approximately 2% of the image across 1 region(s) [semantic].",
+    "confidence": 0.661,
+    "confidence_kind": "evidence_weighted_spatial_ensemble_v2",
+    "contradictions": [],
+    "limitations": [
+      "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+    ],
+    "confidence_breakdown": {
+      "input_quality": 0.96,
+      "spatial_alignment": 0.9,
+      "evidence_strength": 0.595,
+      "ensemble_agreement": 0.51,
+      "model_probability": null,
+      "warning_penalty": 0.04,
+      "final_score": 0.6611,
+      "is_calibrated": true,
+      "calibration_mode": "temperature_scaled_platt",
+      "confidence_interval": [
+        0.422,
+        0.901
+      ],
+      "expected_calibration_error": 0.042
+    }
+  },
+  "trace": [
+    {
+      "step": 1,
+      "component": "typed_planner",
+      "action": "Compiled vegetation_analysis",
+      "status": "ok",
+      "duration_ms": 0,
+      "details": {
+        "tools": [
+          "raster_validator",
+          "ndvi_spectral_engine",
+          "canopy_grounding_engine",
+          "earthdial_4b_rgb",
+          "geoproof_arbiter"
+        ],
+        "reason": "Natural language request asks for vegetation distribution and canopy analysis.",
+        "target": "vegetation"
+      }
+    },
+    {
+      "step": 2,
+      "component": "raster_validator",
+      "action": "Validated file headers, CRS, NoData, and compatibility",
+      "status": "ok",
+      "duration_ms": 8,
+      "details": {
+        "score": 0.96,
+        "compatible": true,
+        "blockers": [],
+        "warnings": [
+          "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+        ],
+        "checks": {
+          "file_count": 1,
+          "geospatial": true
+        }
+      }
+    },
+    {
+      "step": 3,
+      "component": "vegetation_grounding_engine",
+      "action": "Executed vegetation grounding (semantic)",
+      "status": "ok",
+      "duration_ms": 773,
+      "details": {
+        "target": "forest",
+        "coverage_percent": 2.41,
+        "producer": "optical_semantic_vegetation_engine_v1"
+      }
+    },
+    {
+      "step": 4,
+      "component": "remoteclip_retriever",
+      "action": "Executed RemoteCLIP semantic relevance filtering and spatial grouping",
+      "status": "warning",
+      "duration_ms": 2606,
+      "details": {
+        "total_candidates": 1,
+        "relevant_matching": 0,
+        "excluded": 1,
+        "relevance_threshold": 0.7,
+        "max_similarity": 0.594
+      }
+    },
+    {
+      "step": 5,
+      "component": "geoproof",
+      "action": "Applied multi-witness evidence verification and calibrated confidence estimation",
+      "status": "supported",
+      "duration_ms": 0,
+      "details": {
+        "confidence_kind": "evidence_weighted_spatial_ensemble_v2",
+        "evidence_count": 2
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "preview_1.png",
+      "url": "/artifacts/a60c0dc0/preview_1.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "tiles_1_manifest.json",
+      "url": "/artifacts/a60c0dc0/preprocess_1/tiles_manifest.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "forest_dl_grounding.png",
+      "url": "/artifacts/a60c0dc0/forest_dl_grounding.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "forest_dl.geojson",
+      "url": "/artifacts/a60c0dc0/forest_dl.geojson",
+      "mime_type": "application/geo+json"
+    },
+    {
+      "name": "remoteclip_top_tiles_mosaic.png",
+      "url": "/artifacts/a60c0dc0/tile_retrieval/remoteclip_top_tiles_mosaic.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "remoteclip_top_rois.geojson",
+      "url": "/artifacts/a60c0dc0/tile_retrieval/remoteclip_top_rois.geojson",
+      "mime_type": "application/geo+json"
+    },
+    {
+      "name": "remoteclip_retrieval_manifest.json",
+      "url": "/artifacts/a60c0dc0/tile_retrieval/remoteclip_retrieval_manifest.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "GeoProof_Report.pdf",
+      "url": "/artifacts/a60c0dc0/GeoProof_Report.pdf",
+      "mime_type": "application/pdf"
+    }
+  ],
+  "query": "Find forest.",
+  "generated_at": "2026-09-24T18:22:35.718123+00:00",
+  "preprocessing": [
+    {
+      "filename": "sample.tif",
+      "source_format": "raster",
+      "selected_variable": null,
+      "available_variables": [],
+      "tile_size": 448,
+      "overlap": 64,
+      "total_candidate_tiles": 1,
+      "materialized_tiles": 1,
+      "complete_coverage": true,
+      "normalization": "per-band percentile 2-98 to uint8",
+      "manifest_url": "/artifacts/a60c0dc0/preprocess_1/tiles_manifest.json"
+    }
+  ],
+  "summary": {
+    "title": "FOREST DETECTION",
+    "headline": "Forest covers approximately 2% of the image across 1 region(s) [semantic].",
+    "metrics": [
+      {
+        "label": "Coverage",
+        "value": "2%",
+        "icon": "\ud83c\udf3f"
+      },
+      {
+        "label": "Detected Area",
+        "value": "2% of scene",
+        "icon": "\ud83d\udcd0"
+      },
+      {
+        "label": "Regions",
+        "value": "1",
+        "icon": "\ud83d\udccd"
+      },
+      {
+        "label": "Evidence Mode",
+        "value": "Semantic",
+        "icon": "\ud83d\udd2c"
+      },
+      {
+        "label": "Confidence",
+        "value": "66%",
+        "icon": "\u2713"
+      }
+    ],
+    "explanation": "Analysis delineated 2% forest coverage (2% of scene) across 1 distinct region(s) using semantic analysis.",
+    "detected_changes": [],
+    "confidence_percent": 66,
+    "is_insufficient": false
+  }
+}

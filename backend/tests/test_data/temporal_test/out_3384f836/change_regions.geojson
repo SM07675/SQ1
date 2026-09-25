@@ -1,0 +1,43 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              57.0,
+              47.0
+            ],
+            [
+              57.0,
+              123.0
+            ],
+            [
+              153.0,
+              123.0
+            ],
+            [
+              153.0,
+              47.0
+            ],
+            [
+              57.0,
+              47.0
+            ]
+          ]
+        ]
+      },
+      "properties": {
+        "kind": "baseline_change_region",
+        "area_m2": null
+      }
+    }
+  ],
+  "properties": {
+    "crs": null,
+    "producer": "baseline_change_region"
+  }
+}

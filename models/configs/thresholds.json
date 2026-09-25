@@ -1,0 +1,11 @@
+{
+  "building_probability_threshold": 0.60,
+  "boundary_probability_threshold": 0.60,
+  "water_probability_threshold": 0.60,
+  "shadow_threshold": 0.50,
+  "minimum_component_area": 16,
+  "dedupe_iou": 0.40,
+  "uncertainty_threshold": 0.30,
+  "watershed_h_prominence": 6.0,
+  "watershed_min_distance": 8
+}

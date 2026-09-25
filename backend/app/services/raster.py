@@ -37,6 +37,11 @@ def inspect_raster(path: Path) -> RasterMetadata:
         nodata_percent = float((mask == 0).mean() * 100)
         descriptions = list(src.descriptions or ())
         band_names = [descriptions[i] or f"band_{i + 1}" for i in range(src.count)]
+
+        # Sensor modality and format inspection
+        from app.services.croma_pipeline import inspect_modality
+        mod_report = inspect_modality(path)
+
         return RasterMetadata(
             filename=path.name,
             width=src.width,
@@ -50,8 +55,87 @@ def inspect_raster(path: Path) -> RasterMetadata:
             nodata_percent=round(nodata_percent, 3),
             band_names=band_names,
             available_indices=available_indices(path),
+            source_format=mod_report.file_format,
+            file_format=mod_report.file_format,
+            modality=mod_report.modality,
+            sensor_verified=mod_report.sensor_verified,
+            georeferenced=mod_report.georeferenced,
+            metadata_available=mod_report.metadata_available,
+            analysis_capabilities=mod_report.analysis_capabilities,
+            limitations=mod_report.limitations,
         )
 
+
+def inspect_image_quality(path: Path, max_size: int = 1024) -> dict:
+    """
+    Stage 1 quality diagnostics: compute brightness, dynamic range,
+    potential cloud/shadow coverage, and saturation statistics.
+
+    Returns a dict with quality metrics that feed the arbiter.
+    """
+    try:
+        with rasterio.open(path) as src:
+            ratio = min(1.0, max_size / max(src.width, src.height))
+            out_h = max(1, round(src.height * ratio))
+            out_w = max(1, round(src.width * ratio))
+
+            # Read first 3 bands (or fewer)
+            n_bands = min(src.count, 3)
+            bands = []
+            for i in range(1, n_bands + 1):
+                band = src.read(i, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
+                bands.append(band)
+
+            if not bands:
+                return {"quality_score": 0.5, "diagnostics": "No readable bands"}
+
+            stack = np.stack(bands, axis=0)
+
+            # Normalize to [0, 1]
+            max_val = float(stack.max())
+            if max_val > 1.5:
+                stack = stack / (255.0 if max_val <= 255.0 else max_val)
+            stack = np.clip(stack, 0.0, 1.0)
+
+            # Compute luminance (mean across channels)
+            lum = stack.mean(axis=0)
+            mean_brightness = float(lum.mean())
+            std_brightness = float(lum.std())
+
+            # Dynamic range (2nd to 98th percentile)
+            p2, p98 = np.percentile(lum, [2, 98])
+            dynamic_range = float(p98 - p2)
+
+            # Potential cloud pixels (very bright, low contrast)
+            cloud_suspect = float((lum > 0.90).mean() * 100)
+
+            # Potential shadow pixels (very dark)
+            shadow_suspect = float((lum < 0.05).mean() * 100)
+
+            # Saturated pixels (any channel at max)
+            saturated = float((stack.max(axis=0) > 0.99).mean() * 100)
+
+            # Quality score: penalize clouds, shadows, low dynamic range, saturation
+            quality_score = 1.0
+            quality_score -= min(0.3, cloud_suspect / 100 * 0.5)
+            quality_score -= min(0.2, shadow_suspect / 100 * 0.4)
+            quality_score -= max(0, 0.3 - dynamic_range) * 0.5
+            quality_score -= min(0.1, saturated / 100 * 0.2)
+            quality_score = round(max(0.1, min(1.0, quality_score)), 3)
+
+            return {
+                "quality_score": quality_score,
+                "mean_brightness": round(mean_brightness, 4),
+                "std_brightness": round(std_brightness, 4),
+                "dynamic_range": round(dynamic_range, 4),
+                "cloud_suspect_percent": round(cloud_suspect, 2),
+                "shadow_suspect_percent": round(shadow_suspect, 2),
+                "saturated_percent": round(saturated, 2),
+                "image_size": [out_w, out_h],
+                "n_bands": n_bands,
+            }
+    except Exception:
+        return {"quality_score": 0.5, "diagnostics": "Could not compute quality metrics"}
 
 def validate_inputs(paths: list[Path]) -> tuple[list[RasterMetadata], QualityReport]:
     metadata = [inspect_raster(path) for path in paths]
@@ -112,9 +196,17 @@ def validate_inputs(paths: list[Path]) -> tuple[list[RasterMetadata], QualityRep
             elif not same_bounds:
                 warnings.append(f"Paired rasters have partial geographic overlap ({overlap_ratio * 100:.1f}%)")
         elif has_any_crs:
-            # Mixed: one has CRS, one doesn't — block because alignment is ambiguous
-            blockers.append("One image has a CRS and the other does not — cannot verify alignment")
-            checks.update({"same_crs": False, "same_shape": same_shape, "alignment_score": 0.0})
+            # A single georeferenced image cannot establish where the other
+            # image belongs. Reject paired measurements instead of inventing
+            # pixel alignment from matching dimensions.
+            blockers.append("One image has a CRS and the other does not; cannot verify alignment")
+            alignment_score = 0.0
+            checks.update({
+                "same_crs": False,
+                "same_shape": same_shape,
+                "same_bounds": False,
+                "alignment_score": alignment_score,
+            })
         else:
             # Neither has CRS — standard pixel-space image analysis (PNG / JPG / etc.)
             alignment_score = 1.0 if same_shape else 0.85

@@ -64,3 +64,28 @@ def test_confidence_breakdown_calibrated_output():
     assert len(breakdown.confidence_interval) == 2
     assert breakdown.expected_calibration_error is not None
     assert breakdown.final_score >= 0.70
+
+
+def test_confidence_breakdown_unlabelled_scene():
+    quality = QualityReport(
+        score=0.90,
+        compatible=True,
+        blockers=[],
+        warnings=[],
+        checks={"alignment_score": 0.95},
+    )
+    evidence = [
+        EvidenceItem(
+            kind="land_cover_classification",
+            producer="satquery_landcover_v1",
+            summary="Land cover segmentation",
+            confidence=0.82,
+            metrics={"mean_pixel_confidence": 0.78},
+        ),
+    ]
+
+    breakdown = confidence_breakdown(quality, evidence, is_target_domain_labeled=False)
+    assert breakdown.is_calibrated is False
+    assert breakdown.calibration_mode == "uncalibrated_evidence_strength"
+    assert breakdown.expected_calibration_error is None
+

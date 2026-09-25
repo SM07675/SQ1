@@ -1,0 +1,35 @@
+{
+  "inference_verified": true,
+  "checkpoint_sha256": "f8abf21cadaab2a71859e9d172bec4e5d6b7cc9710882a2f6a4d8aae826db036",
+  "verified_at": "2026-09-23T19:03:31.047526+00:00",
+  "checkpoint_id": "Aerial_SwinB_SI",
+  "output_shapes": [
+    [
+      1,
+      128,
+      128,
+      128
+    ],
+    [
+      1,
+      256,
+      64,
+      64
+    ],
+    [
+      1,
+      512,
+      32,
+      32
+    ],
+    [
+      1,
+      1024,
+      16,
+      16
+    ]
+  ],
+  "device": "cuda",
+  "peak_allocated_vram_bytes": 469159936,
+  "role": "foundation backbone; no building task head"
+}

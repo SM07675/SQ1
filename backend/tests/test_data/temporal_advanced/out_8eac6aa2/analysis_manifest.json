@@ -1,0 +1,397 @@
+{
+  "result_id": "8eac6aa2",
+  "task_plan": {
+    "task": "bi_temporal_change",
+    "application": "bi_temporal",
+    "specific_task": "general_change",
+    "sub_tasks": [],
+    "multi_intent": false,
+    "target": null,
+    "asks_direction": false,
+    "tools": [
+      "raster_validator",
+      "phase_correlation_ecc_registration",
+      "change_detector",
+      "ssim_spectral_change_engine",
+      "tinycd_opencd",
+      "polygonizer",
+      "gis_metrics",
+      "geoproof_arbiter",
+      "platt_scaling"
+    ],
+    "reason": "Query expresses temporal comparison or land cover dynamic change over time.",
+    "aoi_text": null,
+    "years": []
+  },
+  "mode": "deterministic_geospatial",
+  "assets": [
+    {
+      "filename": "d1.tif",
+      "width": 220,
+      "height": 180,
+      "bands": 3,
+      "dtype": "uint8",
+      "crs": "EPSG:3857",
+      "bounds": [
+        0.0,
+        0.0,
+        2200.0,
+        1800.0
+      ],
+      "resolution": [
+        10.0,
+        10.0
+      ],
+      "nodata": null,
+      "nodata_percent": 0.0,
+      "band_names": [
+        "band_1",
+        "band_2",
+        "band_3"
+      ],
+      "available_indices": [],
+      "source_format": "raster"
+    },
+    {
+      "filename": "d2.tif",
+      "width": 320,
+      "height": 240,
+      "bands": 3,
+      "dtype": "uint8",
+      "crs": "EPSG:3857",
+      "bounds": [
+        0.0,
+        0.0,
+        3200.0,
+        2400.0
+      ],
+      "resolution": [
+        10.0,
+        10.0
+      ],
+      "nodata": null,
+      "nodata_percent": 0.0,
+      "band_names": [
+        "band_1",
+        "band_2",
+        "band_3"
+      ],
+      "available_indices": [],
+      "source_format": "raster"
+    }
+  ],
+  "quality": {
+    "score": 0.84,
+    "compatible": true,
+    "blockers": [],
+    "warnings": [
+      "d1.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI",
+      "d2.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI",
+      "Paired rasters have different pixel dimensions (220\u00d7180 vs 320\u00d7240); auto-normalized",
+      "Paired rasters have partial geographic overlap (100.0%)"
+    ],
+    "checks": {
+      "file_count": 2,
+      "geospatial": true,
+      "same_crs": true,
+      "same_shape": false,
+      "same_bounds": false,
+      "resolution_ratio": 1.0,
+      "geographic_overlap_ratio": 1.0,
+      "alignment_score": 1.0,
+      "registration_method": "geospatial_crs_reproject",
+      "registration_status": "optimal"
+    }
+  },
+  "evidence": [
+    {
+      "kind": "baseline_change_detection",
+      "producer": "ssim_color_difference_detector_v1",
+      "summary": "No significant surface change measured (0.00% background variance).",
+      "confidence": 0.82,
+      "artifact_url": "/artifacts/8eac6aa2/change_mask.png",
+      "metrics": {
+        "changed_percent": 0.0,
+        "changed_pixels": 0,
+        "total_pixels": 39600,
+        "region_count": 0,
+        "area_m2": null,
+        "otsu_threshold": 0.15
+      },
+      "supports_claim": null,
+      "confidence_source": "producer_score"
+    },
+    {
+      "kind": "learned_change_witness",
+      "producer": "tinycd_siamese_change_witness_v1",
+      "summary": "TinyCD-OpenCD-v1 verified structural change over 0.00% of the scene (pixel-space area) with 0 delineated regions (Consensus IoU: 82.5%).",
+      "confidence": 0.42,
+      "artifact_url": "/artifacts/8eac6aa2/tinycd_change_mask.png",
+      "metrics": {
+        "model_name": "TinyCD-OpenCD-v1",
+        "changed_percent": 0.0,
+        "changed_pixels": 0,
+        "area_m2": null,
+        "region_count": 0,
+        "f1_proxy_score": 0.88,
+        "consensus_agreement_percent": 0.0
+      },
+      "supports_claim": null,
+      "confidence_source": "producer_score"
+    }
+  ],
+  "verdict": {
+    "status": "supported",
+    "answer": "Approximately 0% of the analyzed area has changed between the two images.",
+    "confidence": 0.577,
+    "confidence_kind": "evidence_weighted_spatial_ensemble_v2",
+    "contradictions": [],
+    "limitations": [
+      "d1.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI",
+      "d2.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI",
+      "Paired rasters have different pixel dimensions (220\u00d7180 vs 320\u00d7240); auto-normalized",
+      "Paired rasters have partial geographic overlap (100.0%)"
+    ],
+    "confidence_breakdown": {
+      "input_quality": 0.84,
+      "spatial_alignment": 1.0,
+      "evidence_strength": 0.62,
+      "ensemble_agreement": 0.6,
+      "model_probability": null,
+      "warning_penalty": 0.16,
+      "final_score": 0.5771,
+      "is_calibrated": true,
+      "calibration_mode": "temperature_scaled_platt",
+      "confidence_interval": [
+        0.318,
+        0.836
+      ],
+      "expected_calibration_error": 0.042
+    }
+  },
+  "trace": [
+    {
+      "step": 1,
+      "component": "typed_planner",
+      "action": "Compiled bi_temporal_change",
+      "status": "ok",
+      "duration_ms": 0,
+      "details": {
+        "tools": [
+          "raster_validator",
+          "phase_correlation_ecc_registration",
+          "change_detector",
+          "ssim_spectral_change_engine",
+          "tinycd_opencd",
+          "polygonizer",
+          "gis_metrics",
+          "geoproof_arbiter",
+          "platt_scaling"
+        ],
+        "reason": "Query expresses temporal comparison or land cover dynamic change over time.",
+        "target": null
+      }
+    },
+    {
+      "step": 2,
+      "component": "raster_validator",
+      "action": "Validated file headers, CRS, NoData, and compatibility",
+      "status": "ok",
+      "duration_ms": 44,
+      "details": {
+        "score": 0.84,
+        "compatible": true,
+        "blockers": [],
+        "warnings": [
+          "d1.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI",
+          "d2.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI",
+          "Paired rasters have different pixel dimensions (220\u00d7180 vs 320\u00d7240); auto-normalized",
+          "Paired rasters have partial geographic overlap (100.0%)"
+        ],
+        "checks": {
+          "file_count": 2,
+          "geospatial": true,
+          "same_crs": true,
+          "same_shape": false,
+          "same_bounds": false,
+          "resolution_ratio": 1.0,
+          "geographic_overlap_ratio": 1.0,
+          "alignment_score": 1.0
+        }
+      }
+    },
+    {
+      "step": 3,
+      "component": "image_registration",
+      "action": "Normalized dimensions ((220, 180) & (320, 240) \u2192 (220, 180)) and registered (geospatial_crs_reproject)",
+      "status": "optimal",
+      "duration_ms": 19,
+      "details": {
+        "alignment_score": 1.0,
+        "shift_x": 0.0,
+        "shift_y": 0.0,
+        "method": "geospatial_crs_reproject"
+      }
+    },
+    {
+      "step": 4,
+      "component": "baseline_change_detector",
+      "action": "Executed SSIM + color difference, adaptive Otsu thresholding, and morphological region extraction",
+      "status": "ok",
+      "duration_ms": 1206,
+      "details": {
+        "changed_percent": 0.0,
+        "regions": 0
+      }
+    },
+    {
+      "step": 5,
+      "component": "tinycd_opencd_witness",
+      "action": "Executed TinyCD/Open-CD Siamese structural change model and generated probability heatmap",
+      "status": "ok",
+      "duration_ms": 2528,
+      "details": {
+        "model": "TinyCD-OpenCD-v1",
+        "f1_proxy": 0.88
+      }
+    },
+    {
+      "step": 6,
+      "component": "geoproof",
+      "action": "Applied multi-witness evidence verification and calibrated confidence estimation",
+      "status": "supported",
+      "duration_ms": 0,
+      "details": {
+        "confidence_kind": "evidence_weighted_spatial_ensemble_v2",
+        "evidence_count": 2
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "registration_report.json",
+      "url": "/artifacts/8eac6aa2/registration_report.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "preview_1.png",
+      "url": "/artifacts/8eac6aa2/preview_1.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "preview_2.png",
+      "url": "/artifacts/8eac6aa2/preview_2.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "tiles_1_manifest.json",
+      "url": "/artifacts/8eac6aa2/preprocess_1/tiles_manifest.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "tiles_2_manifest.json",
+      "url": "/artifacts/8eac6aa2/preprocess_2/tiles_manifest.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "change_mask.png",
+      "url": "/artifacts/8eac6aa2/change_mask.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "difference_map.png",
+      "url": "/artifacts/8eac6aa2/difference_map.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "ssim_difference_map.png",
+      "url": "/artifacts/8eac6aa2/ssim_difference_map.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "change_regions.geojson",
+      "url": "/artifacts/8eac6aa2/change_regions.geojson",
+      "mime_type": "application/geo+json"
+    },
+    {
+      "name": "tinycd_change_mask.png",
+      "url": "/artifacts/8eac6aa2/tinycd_change_mask.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "tinycd_change_probability_heatmap.png",
+      "url": "/artifacts/8eac6aa2/tinycd_change_probability_heatmap.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "tinycd_change_polygons.geojson",
+      "url": "/artifacts/8eac6aa2/tinycd_change_polygons.geojson",
+      "mime_type": "application/geo+json"
+    },
+    {
+      "name": "GeoProof_Report.pdf",
+      "url": "/artifacts/8eac6aa2/GeoProof_Report.pdf",
+      "mime_type": "application/pdf"
+    }
+  ],
+  "query": "Show changed areas.",
+  "generated_at": "2026-09-24T18:35:20.230899+00:00",
+  "preprocessing": [
+    {
+      "filename": "prepared_1.png",
+      "source_format": "raster",
+      "selected_variable": null,
+      "available_variables": [],
+      "tile_size": 448,
+      "overlap": 64,
+      "total_candidate_tiles": 1,
+      "materialized_tiles": 1,
+      "complete_coverage": true,
+      "normalization": "per-band percentile 2-98 to uint8",
+      "manifest_url": "/artifacts/8eac6aa2/preprocess_1/tiles_manifest.json"
+    },
+    {
+      "filename": "prepared_2.png",
+      "source_format": "raster",
+      "selected_variable": null,
+      "available_variables": [],
+      "tile_size": 448,
+      "overlap": 64,
+      "total_candidate_tiles": 1,
+      "materialized_tiles": 1,
+      "complete_coverage": true,
+      "normalization": "per-band percentile 2-98 to uint8",
+      "manifest_url": "/artifacts/8eac6aa2/preprocess_2/tiles_manifest.json"
+    }
+  ],
+  "summary": {
+    "title": "CHANGE SUMMARY",
+    "headline": "Approximately 0% of the analyzed area has changed between the two images.",
+    "metrics": [
+      {
+        "label": "Changed Area",
+        "value": "0%",
+        "icon": "\ud83d\udd04"
+      },
+      {
+        "label": "Area Changed",
+        "value": "0% of image",
+        "icon": "\ud83d\udcd0"
+      },
+      {
+        "label": "Change Regions",
+        "value": "0",
+        "icon": "\ud83d\udccd"
+      },
+      {
+        "label": "Confidence",
+        "value": "58%",
+        "icon": "\u2713"
+      }
+    ],
+    "explanation": "Approximately 0% of the analyzed area has changed between the two images.",
+    "detected_changes": [],
+    "confidence_percent": 58,
+    "is_insufficient": false
+  }
+}

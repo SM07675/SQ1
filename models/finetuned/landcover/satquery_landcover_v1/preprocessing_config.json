@@ -1,0 +1,36 @@
+{
+  "task": "multiclass_semantic_segmentation",
+  "input_modality": "RGB VHR aerial/optical imagery",
+  "bands": [
+    "red",
+    "green",
+    "blue"
+  ],
+  "expected_dtype": "uint8 or values compatible with 0..255 scaling",
+  "tile_size": 512,
+  "normalization": {
+    "scale": 255.0,
+    "mean": [
+      0.4535237052059657,
+      0.4693471165828942,
+      0.4352777167252762
+    ],
+    "std": [
+      0.21047783363935432,
+      0.18425352096507464,
+      0.18222531962736283
+    ]
+  },
+  "output": {
+    "type": "logits",
+    "channels": 15,
+    "decision": "softmax_argmax",
+    "optional_min_confidence": 0.0,
+    "ignore_index": 255
+  },
+  "not_for": [
+    "Sentinel-1 SAR",
+    "unadapted multispectral Sentinel-2",
+    "scene-level classification"
+  ]
+}

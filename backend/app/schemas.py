@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 
 
 class TaskType(str, Enum):
+    BUILDING_COUNT = "building_count"
+    BUILDING_CHANGE = "building_change"
+    MULTI_INTENT = "multi_intent"
     SINGLE_VQA = "single_vqa"
     GROUNDING = "grounding"
     BI_TEMPORAL_CHANGE = "bi_temporal_change"
@@ -18,14 +21,30 @@ class TaskType(str, Enum):
     VEGETATION_ANALYSIS = "vegetation_analysis"
     WATER_ANALYSIS = "water_analysis"
     BUILT_UP_ANALYSIS = "built_up_analysis"
+    BUILDINGS = "building_detection"
     UNSUPPORTED = "unsupported"
     UNCLEAR = "unclear"
 
 
 class VerdictStatus(str, Enum):
+    LOW_CONFIDENCE = "low_confidence"
+    INVALID_INPUT = "invalid_input"
+    UNSUPPORTED_TASK = "unsupported_task"
+    MODEL_UNAVAILABLE = "model_unavailable"
+    DEGRADED_ANALYSIS = "degraded_analysis"
     SUPPORTED = "supported"
+    SUPPORTED_WITH_LIMITATIONS = "supported_with_limitations"
     DISPUTED = "disputed"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+
+
+class StructuredLimitation(BaseModel):
+    type: str
+    task: str
+    required: list[str] = Field(default_factory=list)
+    available: list[str] = Field(default_factory=list)
+    impact: str
+    mitigation: str | None = None
 
 
 class TaskPlan(BaseModel):
@@ -56,6 +75,13 @@ class RasterMetadata(BaseModel):
     band_names: list[str]
     available_indices: list[str] = Field(default_factory=list)
     source_format: str = "raster"
+    file_format: str = "geotiff"  # "png" | "jpeg" | "tiff" | "geotiff"
+    modality: str = "optical"      # "optical" | "sar" | "sar_like" | "unknown"
+    sensor_verified: bool = False
+    georeferenced: bool = False
+    metadata_available: bool = False
+    analysis_capabilities: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
 
 
 class QualityReport(BaseModel):
@@ -128,7 +154,24 @@ class GeoVerdict(BaseModel):
     confidence_kind: str
     contradictions: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
+    structured_limitations: list[StructuredLimitation] = Field(default_factory=list)
     confidence_breakdown: ConfidenceBreakdown
+
+
+class SummaryMetric(BaseModel):
+    label: str
+    value: str
+    icon: str | None = None
+
+
+class AnalysisSummary(BaseModel):
+    title: str
+    headline: str
+    metrics: list[SummaryMetric] = Field(default_factory=list)
+    explanation: str
+    detected_changes: list[str] = Field(default_factory=list)
+    confidence_percent: int | None = None
+    is_insufficient: bool = False
 
 
 class AnalysisResponse(BaseModel):
@@ -144,6 +187,14 @@ class AnalysisResponse(BaseModel):
     query: str
     generated_at: str
     preprocessing: list[PreprocessingReport] = Field(default_factory=list)
+    summary: AnalysisSummary | None = None
+    input_configuration: str = "INVALID"
+    findings: list[dict[str, Any]] = Field(default_factory=list)
+    statistics: dict[str, Any] = Field(default_factory=dict)
+    models_used: list[str] = Field(default_factory=list)
+    timings: dict[str, float] = Field(default_factory=dict)
+    clarification: str | None = None
+    report_id: str | None = None
 
 
 class AssetRecord(BaseModel):
@@ -159,6 +210,59 @@ class QueryRequest(BaseModel):
     query: str = Field(min_length=2, max_length=1000)
     asset_ids: list[str] = Field(min_length=1, max_length=2)
     pair_type: str = Field(default="auto", pattern="^(auto|single|bi_temporal|optical_sar)$")
+
+
+class ChatCreateRequest(BaseModel):
+    title: str | None = None
+    chat_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatRenameRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+class ChatSummaryItem(BaseModel):
+    chat_id: str
+    title: str
+    created_at: str
+    updated_at: str
+    last_message: str | None = None
+    message_count: int = 0
+    image_count: int = 0
+    icon: str = "🛰️"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatMessageResponse(BaseModel):
+    message_id: str
+    chat_id: str
+    role: str
+    content: str
+    created_at: str
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
+    result: AnalysisResponse | None = None
+
+
+class ChatImageResponse(BaseModel):
+    image_id: str
+    chat_id: str
+    filename: str
+    url: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: str
+
+
+class ChatDetailResponse(BaseModel):
+    chat_id: str
+    title: str
+    created_at: str
+    updated_at: str
+    icon: str = "🛰️"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    images: list[ChatImageResponse] = Field(default_factory=list)
+    messages: list[ChatMessageResponse] = Field(default_factory=list)
+    latest_result: AnalysisResponse | None = None
 
 
 class VRSBenchCategory(str, Enum):
@@ -249,5 +353,4 @@ class AnalysisRunRecord(BaseModel):
     confidence: float
     created_at: str
     geometries_count: int
-
 

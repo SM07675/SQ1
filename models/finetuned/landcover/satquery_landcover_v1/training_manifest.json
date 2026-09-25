@@ -1,0 +1,47 @@
+{
+  "created_utc": "2026-09-22T16:30:28.275263+00:00",
+  "model_version": "satquery_landcover_v1",
+  "architecture": {
+    "decoder": "U-Net",
+    "encoder": "mit_b2",
+    "classes": 15
+  },
+  "initialization": {
+    "requested": false,
+    "loaded": false,
+    "coverage": 0.0
+  },
+  "dataset": {
+    "name": "FLAIR-1",
+    "mode": "toy",
+    "root_at_training": "/content/satquery_landcover/data",
+    "split_method": "official FLAIR geographic domains",
+    "train_patches": 207,
+    "val_patches": 43,
+    "split_sha256": "83043fafe15fcb69d3a895529a0aedee61de7760413b0aee72249b49c2397012"
+  },
+  "training": {
+    "seed": 2026,
+    "head_epochs": 3,
+    "finetune_epochs": 25,
+    "batch_size": 1,
+    "gradient_accumulation": 8,
+    "loss": {
+      "weighted_cross_entropy": 0.5,
+      "soft_dice": 0.5
+    },
+    "amp": true
+  },
+  "best": {
+    "stage": "finetune",
+    "epoch": 24,
+    "miou": 0.26376042971362457,
+    "macro_f1": 0.3723346357382708
+  },
+  "versions": {
+    "torch": "2.11.0+cu128",
+    "segmentation-models-pytorch": "0.5.0",
+    "timm": "1.0.29",
+    "tifffile": "2026.8.23"
+  }
+}

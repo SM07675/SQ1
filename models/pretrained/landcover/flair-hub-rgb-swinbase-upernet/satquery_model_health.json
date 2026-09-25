@@ -1,0 +1,36 @@
+{
+  "inference_verified": true,
+  "checkpoint_sha256": "a995a226065b176c29f0a66a4937cc8bcea5741887b3f8c17812c430f75f4e3c",
+  "verified_at": "2026-09-23T19:03:34.945629+00:00",
+  "output_shape": [
+    1,
+    19,
+    512,
+    512
+  ],
+  "class_map": [
+    "building",
+    "greenhouse",
+    "swimming_pool",
+    "impervious surface",
+    "pervious surface",
+    "bare soil",
+    "water",
+    "snow",
+    "herbaceous vegetation",
+    "agricultural land",
+    "plowed land",
+    "vineyard",
+    "deciduous",
+    "coniferous",
+    "brushwood",
+    "clear cut",
+    "ligneous",
+    "mixed",
+    "undefined"
+  ],
+  "device": "cuda",
+  "peak_allocated_vram_bytes": 684190720,
+  "preprocessing": "official AERIAL_RGBI custom mean/std",
+  "runtime": "segmentation-models-pytorch==0.4.0"
+}

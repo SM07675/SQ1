@@ -236,10 +236,12 @@ def run_baseline_change_detector(
     # Save artifacts
     mask_path = output_dir / "change_mask.png"
     heatmap_path = output_dir / "difference_map.png"
+    ssim_heatmap_path = output_dir / "ssim_difference_map.png"
     geojson_path = output_dir / "change_regions.geojson"
 
     _save_binary_mask(clean_mask, mask_path, color=(239, 68, 68))
     _save_heatmap(prob_map, heatmap_path)
+    _save_heatmap(ssim_disc, ssim_heatmap_path)
     region_count, total_area_m2 = _polygonize_mask(
         clean_mask, scaled_transform, crs, kind="baseline_change_region", output_path=geojson_path
     )
@@ -254,6 +256,7 @@ def run_baseline_change_detector(
         "mean_change_intensity": round(float(prob_map[clean_mask].mean()) if changed_pixels > 0 else 0.0, 4),
         "mask_path": mask_path,
         "heatmap_path": heatmap_path,
+        "ssim_mask_path": ssim_heatmap_path,
         "geojson_path": geojson_path,
         "clean_mask": clean_mask,
     }

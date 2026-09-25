@@ -1,0 +1,10 @@
+{
+  "type": "FeatureCollection",
+  "features": [],
+  "properties": {
+    "crs": "EPSG:3857",
+    "producer": "remoteclip_semantic_grounding_v2",
+    "matching_regions_count": 0,
+    "matching_tiles_count": 0
+  }
+}

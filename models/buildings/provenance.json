@@ -1,0 +1,9 @@
+{
+  "model_id": "hotosm/dinov3s-buildings",
+  "revision": "f7254545dfbbf10a40594d5a5fb62136902000ae",
+  "sha256": "9a28e28403accc06c70a3104aedb31eca50401ed23c8ba4314b26357c25e9043",
+  "license": "CC-BY-4.0; DINOv3 backbone subject to its separate license",
+  "training_data": "hotosm/vhr-building-segmentation",
+  "evaluation_metrics": null,
+  "source": "https://huggingface.co/hotosm/dinov3s-buildings/tree/f7254545dfbbf10a40594d5a5fb62136902000ae"
+}

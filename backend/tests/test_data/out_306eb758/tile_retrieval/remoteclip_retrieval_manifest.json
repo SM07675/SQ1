@@ -1,0 +1,21 @@
+{
+  "producer": "remoteclip_semantic_grounding_v2",
+  "query": "Find built-up areas.",
+  "total_candidate_tiles": 1,
+  "relevant_tiles_count": 0,
+  "excluded_tiles_count": 1,
+  "relevance_threshold": 0.7,
+  "has_relevant_regions": false,
+  "merged_regions_count": 0,
+  "primary_region": null,
+  "matching_tiles": [],
+  "excluded_tiles": [
+    {
+      "rank": 1,
+      "tile_id": 1,
+      "similarity_score": 0.594,
+      "is_relevant": false,
+      "reason": "Below query relevance threshold (0.59 < 0.70)."
+    }
+  ]
+}

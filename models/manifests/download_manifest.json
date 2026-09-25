@@ -1,0 +1,1104 @@
+{
+  "updated_at": "2026-09-23T19:03:22.340434+00:00",
+  "model_dir": "D:\\Sat1\\models",
+  "models": {
+    "satlas_aerial_swinb_si": {
+      "key": "satlas_aerial_swinb_si",
+      "model_id": "satlas_aerial_swinb_si",
+      "repo_id": "allenai/satlas-pretrain",
+      "repository": "allenai/satlas-pretrain",
+      "local_path": "D:\\Sat1\\models\\pretrained\\buildings\\satlas-aerial-swinb-si",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "buildings",
+      "priority": "foundation",
+      "tasks": [
+        "building_backbone"
+      ],
+      "modality": [
+        "rgb_vhr"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        512,
+        512,
+        3
+      ],
+      "output_type": "multiscale_features_no_task_head",
+      "license": "Apache-2.0",
+      "source_url": "https://github.com/allenai/satlaspretrain_models",
+      "verified_at": "2026-09-23T19:03:22.340984+00:00",
+      "revision": "b1f8de04dacf9f9ed9640fe32484947710b47ede",
+      "file_count": 2,
+      "size_bytes": 504440040,
+      "download_date": "2026-09-23T15:31:20.244401+00:00",
+      "files": [
+        {
+          "name": "aerial_swinb_si.pth",
+          "size_bytes": 504439674,
+          "size_human": "481.1 MB",
+          "sha256": "deferred_large_file"
+        },
+        {
+          "name": "satlas_metadata.json",
+          "size_bytes": 366,
+          "size_human": "366 B",
+          "sha256": "d9bc764e44804eab48800e7274c887d2b4deed8d9ffb560988d5a5abd3949355"
+        }
+      ],
+      "notes": {
+        "checkpoint_id": "Aerial_SwinB_SI",
+        "requires_task_head": true
+      }
+    },
+    "land_flair_hub": {
+      "key": "land_flair_hub",
+      "model_id": "land_flair_hub",
+      "repo_id": "IGNF/FLAIR-HUB_LC-A_RGB_swinbase-upernet",
+      "repository": "IGNF/FLAIR-HUB_LC-A_RGB_swinbase-upernet",
+      "local_path": "D:\\Sat1\\models\\pretrained\\landcover\\flair-hub-rgb-swinbase-upernet",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "landcover",
+      "priority": "baseline",
+      "tasks": [
+        "dense_landcover_segmentation"
+      ],
+      "modality": [
+        "rgb_vhr"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        512,
+        512,
+        3
+      ],
+      "output_type": "19_channel_pixel_logits_15_evaluated_classes",
+      "license": "Etalab-2.0",
+      "source_url": "https://huggingface.co/IGNF/FLAIR-HUB_LC-A_RGB_swinbase-upernet",
+      "verified_at": "2026-09-23T19:03:22.342956+00:00",
+      "revision": "88190fc26a325509a78e4a7289e2ab6a8f5d58a4",
+      "file_count": 4,
+      "size_bytes": 363372869,
+      "download_date": "2026-09-23T15:31:29.550899+00:00",
+      "files": [
+        {
+          "name": "FLAIR-HUB_LC-A_RGB_swinbase-upernet.safetensors",
+          "size_bytes": 363344504,
+          "size_human": "346.5 MB",
+          "sha256": "deferred_large_file"
+        },
+        {
+          "name": "README.md",
+          "size_bytes": 26304,
+          "size_human": "25.7 KB",
+          "sha256": "66f6c62e3012dd53169f3cef797428387977943911d2f1930eb248652c9b9298"
+        },
+        {
+          "name": "configs_train/config_models.yaml",
+          "size_bytes": 684,
+          "size_human": "684 B",
+          "sha256": "a7df8f913892563d6e436a7269bb33a82d032e0e02bf0bb4c8abd716bdb3f7b7"
+        },
+        {
+          "name": "configs_train/config_task.yaml",
+          "size_bytes": 1377,
+          "size_human": "1.3 KB",
+          "sha256": "51e39a6fcfd858924f99cec842aa6bc3b7b4b77d04f4f7932025e836eaa20e46"
+        }
+      ],
+      "notes": {
+        "class_map_source": "configs_train/config_supervision.yaml",
+        "ignored_class_ids": [
+          15,
+          16,
+          17,
+          18
+        ]
+      }
+    },
+    "building_fallback": {
+      "key": "building_fallback",
+      "model_id": "building_fallback",
+      "repo_id": "geobase/dinov3s-buildings",
+      "repository": "geobase/dinov3s-buildings",
+      "local_path": "D:\\Sat1\\models\\pretrained\\buildings\\dinov3s-buildings",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "buildings",
+      "priority": "fallback",
+      "tasks": [
+        "building_detection",
+        "building_footprint",
+        "building_count",
+        "building_grounding"
+      ],
+      "modality": [
+        "rgb"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        256,
+        256,
+        3
+      ],
+      "output_type": "per_pixel_building_probability",
+      "license": "CC-BY-4.0; DINOv3 backbone subject to separate license",
+      "source_url": "https://huggingface.co/geobase/dinov3s-buildings",
+      "verified_at": "2026-09-23T19:03:22.344820+00:00",
+      "revision": null,
+      "file_count": 5,
+      "size_bytes": 893701416,
+      "download_date": "2026-09-23T15:17:01.445262+00:00",
+      "files": [
+        {
+          "name": "onnx/model.onnx",
+          "size_bytes": 219574600,
+          "size_human": "209.4 MB",
+          "sha256": "deferred_large_file"
+        },
+        {
+          "name": "model.ckpt",
+          "size_bytes": 674125093,
+          "size_human": "642.9 MB",
+          "sha256": "deferred_large_file"
+        },
+        {
+          "name": "config.json",
+          "size_bytes": 5,
+          "size_human": "5 B",
+          "sha256": "ce11c90ae6b71961ad5361e26e78f2a1966a9b46344e8d9492dc062bd3381f8b"
+        },
+        {
+          "name": "preprocessor_config.json",
+          "size_bytes": 342,
+          "size_human": "342 B",
+          "sha256": "19b1c34aa793573cafc7cf1302305a8e5a52eb01bfaf32089dadb86f4541da68"
+        },
+        {
+          "name": "README.md",
+          "size_bytes": 1376,
+          "size_human": "1.3 KB",
+          "sha256": "8bec89bcd82d6f49a05859fc5e18a3cfa024b792b3cf8e871cdb373d9c907f6f"
+        }
+      ],
+      "notes": {
+        "default_window_size": 256,
+        "default_stride": 192,
+        "default_threshold": 0.4371,
+        "threshold_note": "Documented initial default. Subject to empirical benchmark tuning."
+      }
+    },
+    "building_secondary": {
+      "key": "building_secondary",
+      "model_id": "building_secondary",
+      "repo_id": "geobase/building-detection",
+      "repository": "geobase/building-detection",
+      "local_path": "D:\\Sat1\\models\\buildings\\geobase-building-detection",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "buildings",
+      "priority": "secondary",
+      "tasks": [
+        "building_validation",
+        "secondary_building_check"
+      ],
+      "modality": [
+        "rgb"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        256,
+        256,
+        3
+      ],
+      "output_type": "building_detection_logits",
+      "license": "CC-BY-4.0",
+      "source_url": "https://huggingface.co/geobase/building-detection",
+      "verified_at": "2026-09-23T19:03:22.381034+00:00",
+      "revision": null,
+      "file_count": 4,
+      "size_bytes": 45460022,
+      "download_date": "2026-09-23T11:52:39.707812+00:00",
+      "files": [
+        {
+          "name": "onnx/model_quantized.onnx",
+          "size_bytes": 45456422,
+          "size_human": "43.4 MB",
+          "sha256": "8165a56e04b5e9f3d6ab753fd8a96537e398408062e80773bb580eff79d1bcf4"
+        },
+        {
+          "name": "config.json",
+          "size_bytes": 2,
+          "size_human": "2 B",
+          "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        },
+        {
+          "name": "preprocessor_config.json",
+          "size_bytes": 269,
+          "size_human": "269 B",
+          "sha256": "737d0b762b0a144706aea11ab0210e507f0a006ad1f5c6a8a833c772179acba6"
+        },
+        {
+          "name": "README.md",
+          "size_bytes": 3329,
+          "size_human": "3.3 KB",
+          "sha256": "a220a74c8dd08215396f72a66029bcfeaff27f39222eb917b4074245a63f1369"
+        }
+      ],
+      "notes": {
+        "role": "Secondary/validation building model. Do not make default until benchmark proves improvement."
+      }
+    },
+    "land_rgb": {
+      "key": "land_rgb",
+      "model_id": "land_rgb",
+      "repo_id": "IGNF/FLAIR-INC_rgb_15cl_resnet34-deeplabv3",
+      "repository": "IGNF/FLAIR-INC_rgb_15cl_resnet34-deeplabv3",
+      "local_path": "D:\\Sat1\\models\\land_cover\\flair-rgb-15cl-deeplabv3",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "land_cover",
+      "priority": "primary",
+      "tasks": [
+        "land_cover_segmentation",
+        "pixel_land_cover_rgb"
+      ],
+      "modality": [
+        "rgb"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        512,
+        512,
+        3
+      ],
+      "output_type": "15_class_pixel_probabilities",
+      "license": "Etalab-2.0",
+      "source_url": "https://huggingface.co/IGNF/FLAIR-INC_rgb_15cl_resnet34-deeplabv3",
+      "verified_at": "2026-09-23T19:03:22.419482+00:00",
+      "revision": null,
+      "file_count": 2,
+      "size_bytes": 104236253,
+      "download_date": "2026-09-21T15:28:15.014710+00:00",
+      "files": [
+        {
+          "name": "FLAIR-INC_rgb_15cl_resnet34-deeplabv3_weights.pth",
+          "size_bytes": 104221495,
+          "size_human": "99.4 MB",
+          "sha256": "05d26cbc823a5add49ac4500efd60a14185e8a6ebf73044a7607ac827bc9fb1f"
+        },
+        {
+          "name": "README.md",
+          "size_bytes": 14758,
+          "size_human": "14.4 KB",
+          "sha256": "cc3f42aec67b5f6f0f23cc5fd1db619b6ffcbeb38f8622835c71a48de6d89f6f"
+        }
+      ],
+      "notes": {
+        "compatibility": "High-resolution RGB imagery only (0.2m-0.5m GSD). Do NOT apply to SAR or coarse multispectral tensors.",
+        "classes": [
+          "building",
+          "pervious_surface",
+          "impervious_surface",
+          "bare_soil",
+          "water",
+          "coniferous",
+          "deciduous",
+          "brushwood",
+          "vineyard",
+          "herbaceous_vegetation",
+          "agricultural_land",
+          "plowed_land",
+          "swimming_pool",
+          "greenhouse",
+          "other"
+        ]
+      }
+    },
+    "land_s2": {
+      "key": "land_s2",
+      "model_id": "land_s2",
+      "repo_id": "BIFOLD-BigEarthNetv2-0/resnet50-s2-v0.2.0",
+      "repository": "BIFOLD-BigEarthNetv2-0/resnet50-s2-v0.2.0",
+      "local_path": "D:\\Sat1\\models\\pretrained\\bigearthnet\\s2-resnet50",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "land_cover",
+      "priority": "primary_s2",
+      "tasks": [
+        "scene_level_land_cover_s2",
+        "sanity_evidence"
+      ],
+      "modality": [
+        "multispectral_s2"
+      ],
+      "expected_channels": [
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B08",
+        "B8A",
+        "B11",
+        "B12"
+      ],
+      "input_size": [
+        120,
+        120,
+        10
+      ],
+      "output_type": "19_class_multilabel_probabilities",
+      "license": "MIT",
+      "source_url": "https://huggingface.co/BIFOLD-BigEarthNetv2-0/resnet50-s2-v0.2.0",
+      "verified_at": "2026-09-23T19:03:22.456153+00:00",
+      "revision": null,
+      "file_count": 3,
+      "size_bytes": 94531474,
+      "download_date": "2026-09-23T15:17:01.458770+00:00",
+      "files": [
+        {
+          "name": "model.safetensors",
+          "size_bytes": 94523860,
+          "size_human": "90.1 MB",
+          "sha256": "9de7412c880d250c6b71e726e61a8385c6feaecf514246458a5424baea6c708a"
+        },
+        {
+          "name": "config.json",
+          "size_bytes": 850,
+          "size_human": "850 B",
+          "sha256": "fad3cdb9cfea47098f47e9c12f650074edf6d069b6d17c35ff27071bbc546c39"
+        },
+        {
+          "name": "README.md",
+          "size_bytes": 6764,
+          "size_human": "6.6 KB",
+          "sha256": "e2a3d1e825340808458f26e38f60fd839b21b9fff13405b4808830a66f7d3c7c"
+        }
+      ],
+      "notes": {
+        "role": "Scene-level land cover classification. DO NOT use as pixel segmentation.",
+        "channel_ordering": "reBEN v0.2.0 exact 10 Sentinel-2 bands: B02, B03, B04, B05, B06, B07, B08, B8A, B11, B12. Never mix with v0.1.1 band mappings."
+      }
+    },
+    "land_s1": {
+      "key": "land_s1",
+      "model_id": "land_s1",
+      "repo_id": "BIFOLD-BigEarthNetv2-0/resnet50-s1-v0.2.0",
+      "repository": "BIFOLD-BigEarthNetv2-0/resnet50-s1-v0.2.0",
+      "local_path": "D:\\Sat1\\models\\pretrained\\bigearthnet\\s1-resnet50",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "land_cover",
+      "priority": "primary_s1",
+      "tasks": [
+        "scene_level_land_cover_s1",
+        "sar_evidence"
+      ],
+      "modality": [
+        "sar_s1"
+      ],
+      "expected_channels": [
+        "VH",
+        "VV"
+      ],
+      "input_size": [
+        120,
+        120,
+        2
+      ],
+      "output_type": "19_class_multilabel_probabilities",
+      "license": "MIT",
+      "source_url": "https://huggingface.co/BIFOLD-BigEarthNetv2-0/resnet50-s1-v0.2.0",
+      "verified_at": "2026-09-23T19:03:22.493499+00:00",
+      "revision": null,
+      "file_count": 3,
+      "size_bytes": 94431137,
+      "download_date": "2026-09-23T15:17:01.462788+00:00",
+      "files": [
+        {
+          "name": "model.safetensors",
+          "size_bytes": 94423500,
+          "size_human": "90.0 MB",
+          "sha256": "98934ec2ab881f4a9d36e2b1bd9ba8bdf06174527ef533e63768a74a81bd532c"
+        },
+        {
+          "name": "config.json",
+          "size_bytes": 849,
+          "size_human": "849 B",
+          "sha256": "60feb6be66e2c61ca7ce60e86df5ee57fd89e08653c0662d076a6b25aff90e68"
+        },
+        {
+          "name": "README.md",
+          "size_bytes": 6788,
+          "size_human": "6.6 KB",
+          "sha256": "26c7673fd8e34849495d76c14da49ba0160d255c0e39d115f555007b7452050e"
+        }
+      ],
+      "notes": {
+        "role": "Sentinel-1 SAR scene-level land cover evidence.",
+        "channel_ordering": "reBEN v0.2.0 exact 2 SAR channels: [VH, VV]."
+      }
+    },
+    "land_s1s2": {
+      "key": "land_s1s2",
+      "model_id": "land_s1s2",
+      "repo_id": "BIFOLD-BigEarthNetv2-0/resnet101-all-v0.2.0",
+      "repository": "BIFOLD-BigEarthNetv2-0/resnet101-all-v0.2.0",
+      "local_path": "D:\\Sat1\\models\\pretrained\\bigearthnet\\s1s2-resnet101",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "land_cover",
+      "priority": "primary_joint",
+      "tasks": [
+        "scene_level_land_cover_joint"
+      ],
+      "modality": [
+        "optical_sar_joint"
+      ],
+      "expected_channels": [
+        "VH",
+        "VV",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B08",
+        "B8A",
+        "B11",
+        "B12"
+      ],
+      "input_size": [
+        120,
+        120,
+        12
+      ],
+      "output_type": "19_class_multilabel_probabilities",
+      "license": "MIT",
+      "source_url": "https://huggingface.co/BIFOLD-BigEarthNetv2-0/resnet101-all-v0.2.0",
+      "verified_at": "2026-09-23T19:03:22.494568+00:00",
+      "revision": null,
+      "file_count": 3,
+      "size_bytes": 170768929,
+      "download_date": "2026-09-23T15:17:01.466791+00:00",
+      "files": [
+        {
+          "name": "model.safetensors",
+          "size_bytes": 170761284,
+          "size_human": "162.9 MB",
+          "sha256": "deferred_large_file"
+        },
+        {
+          "name": "config.json",
+          "size_bytes": 851,
+          "size_human": "851 B",
+          "sha256": "e9b4115b5ebd94b7d55ba13d9aaf7525f03134857daddf5be665a256b0f9d32d"
+        },
+        {
+          "name": "README.md",
+          "size_bytes": 6794,
+          "size_human": "6.6 KB",
+          "sha256": "dadea6e899a5f20574cf3ec7fcf5db4c010548569c99b60d8df2ea7a3f59c673"
+        }
+      ],
+      "notes": {
+        "role": "Joint Sentinel-1 + Sentinel-2 scene-level classification. Only execute when exact required 12 S1/S2 channels exist."
+      }
+    },
+    "water_s2": {
+      "key": "water_s2",
+      "model_id": "water_s2",
+      "repo_id": "GNSFoundation/Prithvi-EO-2.0-300M-TL-Sen1Floods11",
+      "repository": "GNSFoundation/Prithvi-EO-2.0-300M-TL-Sen1Floods11",
+      "local_path": "D:\\Sat1\\models\\pretrained\\water\\prithvi-sen1floods11",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "water",
+      "priority": "primary_water_s2",
+      "tasks": [
+        "water_segmentation",
+        "flood_mapping_s2"
+      ],
+      "modality": [
+        "multispectral_s2"
+      ],
+      "expected_channels": [
+        "Blue",
+        "Green",
+        "Red",
+        "Narrow NIR",
+        "SWIR1",
+        "SWIR2"
+      ],
+      "input_size": [
+        512,
+        512,
+        6
+      ],
+      "output_type": "pixel_water_probability_and_classes",
+      "license": "Apache-2.0",
+      "source_url": "https://huggingface.co/GNSFoundation/Prithvi-EO-2.0-300M-TL-Sen1Floods11",
+      "verified_at": "2026-09-23T19:03:22.496221+00:00",
+      "revision": null,
+      "file_count": 4,
+      "size_bytes": 1276853485,
+      "download_date": "2026-09-23T15:17:01.452760+00:00",
+      "files": [
+        {
+          "name": "Prithvi-EO-V2-300M-TL-Sen1Floods11.pt",
+          "size_bytes": 1276843350,
+          "size_human": "1.19 GB",
+          "sha256": "deferred_large_file"
+        },
+        {
+          "name": "config.json",
+          "size_bytes": 3234,
+          "size_human": "3.2 KB",
+          "sha256": "1e264cfa018959e77b09d164be2a126fe945fff1a99b34f1f2fdc137c3092b28"
+        },
+        {
+          "name": "config.yaml",
+          "size_bytes": 3658,
+          "size_human": "3.6 KB",
+          "sha256": "ecc9ba411c7e2ca0be70bb597e0aae45d866acaf1fdfd2f4b8ac652ee5eab0b0"
+        },
+        {
+          "name": "README.md",
+          "size_bytes": 3243,
+          "size_human": "3.2 KB",
+          "sha256": "2aff52e3b680ca1f0b81a546dc733b4735a8611ab9b9623a3b0747d3e70c03cd"
+        }
+      ],
+      "notes": {
+        "channel_safety": "Expects 6 Sentinel-2 bands: Blue, Green, Red, Narrow NIR, SWIR1, SWIR2. Do NOT use for arbitrary RGB images.",
+        "routing_fallback": "If imagery lacks required bands, route to alternative spectral water proxy."
+      }
+    },
+    "grounding_dino": {
+      "key": "grounding_dino",
+      "model_id": "grounding_dino",
+      "repo_id": "IDEA-Research/grounding-dino-tiny",
+      "repository": "IDEA-Research/grounding-dino-tiny",
+      "local_path": "D:\\Sat1\\models\\grounding\\grounding-dino",
+      "status": "MISSING",
+      "download_status": "MISSING",
+      "category": "grounding",
+      "priority": "optional",
+      "tasks": [
+        "open_vocabulary_object_grounding",
+        "bounding_box_detection"
+      ],
+      "modality": [
+        "rgb"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        800,
+        800,
+        3
+      ],
+      "output_type": "bounding_boxes_and_phrase_scores",
+      "license": "Apache-2.0",
+      "source_url": "https://huggingface.co/IDEA-Research/grounding-dino-tiny",
+      "verified_at": "2026-09-23T19:03:22.496332+00:00",
+      "revision": null,
+      "file_count": 0,
+      "size_bytes": 0,
+      "download_date": "2026-09-21T15:24:24.065837+00:00",
+      "files": [],
+      "notes": {}
+    },
+    "sam2": {
+      "key": "sam2",
+      "model_id": "sam2",
+      "repo_id": "facebook/sam2-hiera-tiny",
+      "repository": "facebook/sam2-hiera-tiny",
+      "local_path": "D:\\Sat1\\models\\grounding\\sam2",
+      "status": "MISSING",
+      "download_status": "MISSING",
+      "category": "grounding",
+      "priority": "optional",
+      "tasks": [
+        "mask_refinement",
+        "interactive_segmentation"
+      ],
+      "modality": [
+        "rgb"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        1024,
+        1024,
+        3
+      ],
+      "output_type": "binary_mask_refinements",
+      "license": "Apache-2.0",
+      "source_url": "https://huggingface.co/facebook/sam2-hiera-tiny",
+      "verified_at": "2026-09-23T19:03:22.496391+00:00",
+      "revision": null,
+      "file_count": 0,
+      "size_bytes": 0,
+      "download_date": "2026-09-21T15:24:24.065837+00:00",
+      "files": [],
+      "notes": {}
+    },
+    "earthdial": {
+      "key": "earthdial",
+      "model_id": "earthdial",
+      "repo_id": "akshaydudhane/EarthDial_4B",
+      "repository": "akshaydudhane/EarthDial_4B",
+      "local_path": "D:\\Sat1\\models\\vlm\\earthdial-4b\\EarthDial_4B_RGB",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "vlm",
+      "priority": "primary_vlm",
+      "tasks": [
+        "scene_description",
+        "natural_language_explanation"
+      ],
+      "modality": [
+        "rgb",
+        "multispectral"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        448,
+        448,
+        3
+      ],
+      "output_type": "natural_language_explanation",
+      "license": "Research/Academic",
+      "source_url": "https://huggingface.co/akshaydudhane/EarthDial_4B_RGB",
+      "verified_at": "2026-09-23T19:03:22.497218+00:00",
+      "revision": null,
+      "file_count": 1,
+      "size_bytes": 8150,
+      "download_date": "2026-09-09T08:13:20.423707+00:00",
+      "files": [
+        {
+          "name": "config.json",
+          "size_bytes": 8150,
+          "size_human": "8.0 KB",
+          "sha256": "5548c8b092c55823dde192880f338ade318389438444260977ce6ec208c578b4"
+        }
+      ],
+      "notes": {}
+    },
+    "remoteclip_rn50": {
+      "key": "remoteclip_rn50",
+      "model_id": "remoteclip_rn50",
+      "repo_id": "chendelong/RemoteCLIP-RN50",
+      "repository": "chendelong/RemoteCLIP-RN50",
+      "local_path": "D:\\Sat1\\models\\remoteclip\\rn50",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "remoteclip",
+      "priority": "primary_retrieval",
+      "tasks": [
+        "semantic_retrieval",
+        "zero_shot_classification"
+      ],
+      "modality": [
+        "rgb"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        224,
+        224,
+        3
+      ],
+      "output_type": "feature_embedding_1024d",
+      "license": "CC-BY-NC-4.0",
+      "source_url": "https://huggingface.co/chendelong/RemoteCLIP",
+      "verified_at": "2026-09-23T19:03:22.497490+00:00",
+      "revision": null,
+      "file_count": 1,
+      "size_bytes": 408397807,
+      "download_date": "2026-09-21T15:24:24.066875+00:00",
+      "files": [
+        {
+          "name": "RemoteCLIP-RN50.pt",
+          "size_bytes": 408397807,
+          "size_human": "389.5 MB",
+          "sha256": "deferred_large_file"
+        }
+      ],
+      "notes": {}
+    },
+    "remoteclip_vit_b_32": {
+      "key": "remoteclip_vit_b_32",
+      "model_id": "remoteclip_vit_b_32",
+      "repo_id": "chendelong/RemoteCLIP-ViT-B-32",
+      "repository": "chendelong/RemoteCLIP-ViT-B-32",
+      "local_path": "D:\\Sat1\\models\\remoteclip\\vit-b-32",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "remoteclip",
+      "priority": "secondary_retrieval",
+      "tasks": [
+        "semantic_retrieval",
+        "zero_shot_classification"
+      ],
+      "modality": [
+        "rgb"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        224,
+        224,
+        3
+      ],
+      "output_type": "feature_embedding_512d",
+      "license": "CC-BY-NC-4.0",
+      "source_url": "https://huggingface.co/chendelong/RemoteCLIP",
+      "verified_at": "2026-09-23T19:03:22.497563+00:00",
+      "revision": null,
+      "file_count": 1,
+      "size_bytes": 605208421,
+      "download_date": "2026-09-21T15:24:24.067914+00:00",
+      "files": [
+        {
+          "name": "RemoteCLIP-ViT-B-32.pt",
+          "size_bytes": 605208421,
+          "size_human": "577.2 MB",
+          "sha256": "deferred_large_file"
+        }
+      ],
+      "notes": {}
+    },
+    "croma_base": {
+      "key": "croma_base",
+      "model_id": "croma_base",
+      "repo_id": "antofuller/CROMA_base",
+      "repository": "antofuller/CROMA_base",
+      "local_path": "D:\\Sat1\\models\\fusion\\croma",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "fusion",
+      "priority": "primary_fusion",
+      "tasks": [
+        "optical_sar_joint_representation",
+        "feature_extraction"
+      ],
+      "modality": [
+        "optical_sar"
+      ],
+      "expected_channels": [
+        "SAR_VH",
+        "SAR_VV",
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "B07",
+        "B08",
+        "B8A",
+        "B09",
+        "B11",
+        "B12"
+      ],
+      "input_size": [
+        120,
+        120,
+        14
+      ],
+      "output_type": "multimodal_embeddings",
+      "license": "MIT",
+      "source_url": "https://github.com/antofuller/CROMA",
+      "verified_at": "2026-09-23T19:03:22.497616+00:00",
+      "revision": null,
+      "file_count": 1,
+      "size_bytes": 777563846,
+      "download_date": "2026-09-21T15:24:24.069020+00:00",
+      "files": [
+        {
+          "name": "CROMA_base.pt",
+          "size_bytes": 777563846,
+          "size_human": "741.5 MB",
+          "sha256": "deferred_large_file"
+        }
+      ],
+      "notes": {}
+    },
+    "tinycd": {
+      "key": "tinycd",
+      "model_id": "tinycd",
+      "repo_id": "AndreaCodegoni/Tiny_model_4_CD",
+      "repository": "AndreaCodegoni/Tiny_model_4_CD",
+      "local_path": "D:\\Sat1\\models\\change_detection\\tinycd",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "change_detection",
+      "priority": "primary_change",
+      "tasks": [
+        "bitemporal_change_detection"
+      ],
+      "modality": [
+        "optical_bitemporal"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        256,
+        256,
+        3
+      ],
+      "output_type": "binary_change_probability",
+      "license": "Non-commercial / Research",
+      "source_url": "https://github.com/AndreaCodegoni/Tiny_model_4_CD",
+      "verified_at": "2026-09-23T19:03:22.499744+00:00",
+      "revision": null,
+      "file_count": 1,
+      "size_bytes": 1276499,
+      "download_date": "2026-09-09T07:51:44.655565+00:00",
+      "files": [
+        {
+          "name": "levir_best.pth",
+          "size_bytes": 1276499,
+          "size_human": "1.2 MB",
+          "sha256": "743645b87199c96bd0c3271ae5df6f0918b3f1d84618dfb9396843ca08ee4a3e"
+        }
+      ],
+      "notes": {}
+    },
+    "bit": {
+      "key": "bit",
+      "model_id": "bit",
+      "repo_id": "likyoo/Open-CD_Model_Zoo/bit",
+      "repository": "likyoo/Open-CD_Model_Zoo/bit",
+      "local_path": "D:\\Sat1\\models\\change_detection\\bit",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "change_detection",
+      "priority": "secondary_change",
+      "tasks": [
+        "bitemporal_change_detection"
+      ],
+      "modality": [
+        "optical_bitemporal"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        256,
+        256,
+        3
+      ],
+      "output_type": "binary_change_mask",
+      "license": "Apache-2.0",
+      "source_url": "https://huggingface.co/likyoo/Open-CD_Model_Zoo",
+      "verified_at": "2026-09-23T19:03:22.528936+00:00",
+      "revision": null,
+      "file_count": 1,
+      "size_bytes": 40565347,
+      "download_date": "2026-09-21T15:24:24.071919+00:00",
+      "files": [
+        {
+          "name": "bit_r18_256x256_40k_levircd.pth",
+          "size_bytes": 40565347,
+          "size_human": "38.7 MB",
+          "sha256": "a6e8e3b7c09a4692c0690ed11fe9148bdde658f233f356078ce3efe15e3ffc55"
+        }
+      ],
+      "notes": {}
+    },
+    "changerex": {
+      "key": "changerex",
+      "model_id": "changerex",
+      "repo_id": "likyoo/Open-CD_Model_Zoo/changerex",
+      "repository": "likyoo/Open-CD_Model_Zoo/changerex",
+      "local_path": "D:\\Sat1\\models\\change_detection\\changerex",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "change_detection",
+      "priority": "secondary_change",
+      "tasks": [
+        "bitemporal_change_detection"
+      ],
+      "modality": [
+        "optical_bitemporal"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        512,
+        512,
+        3
+      ],
+      "output_type": "binary_change_mask",
+      "license": "Apache-2.0",
+      "source_url": "https://huggingface.co/likyoo/Open-CD_Model_Zoo",
+      "verified_at": "2026-09-23T19:03:22.529095+00:00",
+      "revision": null,
+      "file_count": 1,
+      "size_bytes": 136880383,
+      "download_date": "2026-09-21T15:24:24.072963+00:00",
+      "files": [
+        {
+          "name": "ChangerEx_r18-512x512_40k_levircd.pth",
+          "size_bytes": 136880383,
+          "size_human": "130.5 MB",
+          "sha256": "deferred_large_file"
+        }
+      ],
+      "notes": {}
+    },
+    "ban": {
+      "key": "ban",
+      "model_id": "ban",
+      "repo_id": "likyoo/Open-CD_Model_Zoo/ban",
+      "repository": "likyoo/Open-CD_Model_Zoo/ban",
+      "local_path": "D:\\Sat1\\models\\change_detection\\ban",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "change_detection",
+      "priority": "secondary_change",
+      "tasks": [
+        "bitemporal_change_detection"
+      ],
+      "modality": [
+        "optical_bitemporal"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        512,
+        512,
+        3
+      ],
+      "output_type": "binary_change_mask",
+      "license": "Apache-2.0",
+      "source_url": "https://huggingface.co/likyoo/Open-CD_Model_Zoo",
+      "verified_at": "2026-09-23T19:03:22.529151+00:00",
+      "revision": null,
+      "file_count": 1,
+      "size_bytes": 971852728,
+      "download_date": "2026-09-21T15:24:24.073487+00:00",
+      "files": [
+        {
+          "name": "ban_vit-l14-clip_mit-b0_512x512_40k_levircd.pth",
+          "size_bytes": 971852728,
+          "size_human": "926.8 MB",
+          "sha256": "deferred_large_file"
+        }
+      ],
+      "notes": {}
+    },
+    "changemamba": {
+      "key": "changemamba",
+      "model_id": "changemamba",
+      "repo_id": "ChenHongruixuan/ChangeMamba",
+      "repository": "ChenHongruixuan/ChangeMamba",
+      "local_path": "D:\\Sat1\\models\\change_detection\\changemamba",
+      "status": "UNVERIFIED",
+      "download_status": "UNVERIFIED",
+      "category": "change_detection",
+      "priority": "research_change",
+      "tasks": [
+        "ssm_change_detection"
+      ],
+      "modality": [
+        "optical_bitemporal"
+      ],
+      "expected_channels": [
+        "red",
+        "green",
+        "blue"
+      ],
+      "input_size": [
+        256,
+        256,
+        3
+      ],
+      "output_type": "binary_change_mask",
+      "license": "Academic / Research",
+      "source_url": "https://github.com/ChenHongruixuan/ChangeMamba",
+      "verified_at": "2026-09-23T19:03:22.529701+00:00",
+      "revision": null,
+      "file_count": 1,
+      "size_bytes": 415,
+      "download_date": "2026-09-21T15:24:24.074015+00:00",
+      "files": [
+        {
+          "name": "README.md",
+          "size_bytes": 415,
+          "size_human": "415 B",
+          "sha256": "56620156d973340f5b1844d8de2dfb45e6433a71d189c09bf28aede6470d4da8"
+        }
+      ],
+      "notes": {
+        "status_on_windows": "UNAVAILABLE_ON_WINDOWS",
+        "reason": "Requires Linux and custom compiled CUDA selective_scan kernels. Zenodo checkpoints 14037769."
+      }
+    }
+  },
+  "reused_models": {},
+  "summary": {
+    "total_models": 20,
+    "ready_models": 0,
+    "unverified_models": 18,
+    "missing_models": 2,
+    "corrupt_models": 0,
+    "total_disk_bytes": 36122060590,
+    "total_disk_human": "33.64 GB",
+    "selected_checkpoint_bytes": 6489549221
+  }
+}

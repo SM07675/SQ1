@@ -1,0 +1,39 @@
+labels: 
+  - AERIAL_LABEL-COSIA
+
+labels_configs:
+    AERIAL_LABEL-COSIA:
+        task_weight: 1
+        value_name:
+            0  : 'building'
+            1  : 'greenhouse'
+            2  : 'swimming_pool'
+            3  : 'impervious surface'
+            4  : 'pervious surface'
+            5  : 'bare soil'
+            6  : 'water'
+            7  : 'snow'
+            8  : 'herbaceous vegetation'
+            9  : 'agricultural land'
+            10 : 'plowed land'
+            11 : 'vineyard'
+            12 : 'deciduous'
+            13 : 'coniferous'
+            14 : 'brushwood'
+            15 : 'clear cut'
+            16 : 'ligneous'
+            17 : 'mixed'
+            18 : 'undefined'
+        value_weights: 
+            default: 1
+            default_exceptions:
+                15: 0
+                16: 0
+                17: 0
+                18: 0
+            per_modality_exceptions:
+                AERIAL_RGBI: 
+                SENTINEL2_TS: 
+                SENTINEL1-ASC_TS: 
+                SENTINEL1-DESC_TS:
+

@@ -54,10 +54,10 @@ def test_16_canonical_queries() -> None:
     assert p6.application == "single_image"
     assert p6.task == TaskType.BUILT_UP_ANALYSIS
 
-    # 7. Single VQA
+    # 7. Building Detection (now has dedicated DL task type)
     p7 = plan_query("How many buildings are visible?", 1)
     assert p7.application == "single_image"
-    assert p7.task == TaskType.SINGLE_VQA
+    assert p7.task == TaskType.BUILDINGS
 
     # 8. General Change Analysis
     p8 = plan_query("What changed between these two images?", 2)

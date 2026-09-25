@@ -1,0 +1,7 @@
+{
+  "building_probability_threshold": 0.6,
+  "boundary_probability_threshold": 0.6,
+  "instance_min_area_pixels": 48,
+  "watershed_h_prominence": 6.0,
+  "watershed_min_distance": 8
+}

@@ -313,6 +313,11 @@ def _system_technical_limitations(limitations_list: list[str] | None, has_crs: b
 def _friendly_producer_info(producer: str, kind: str) -> tuple[str, str, str]:
     """Returns (Friendly Name, Technical Identifier, Pipeline Role)."""
     mapping = {
+        "satquery_waternet_swinv2": (
+            "SatlasWaterNet Deep Learning Engine",
+            "satquery_waternet_swinv2 (Swin-v2 + FPN + Spectral Fusion)",
+            "Calibrated Deep Learning Water Delineation",
+        ),
         "optical_water_grounding_engine_v2": (
             "Optical RGB Water Grounding Engine",
             "optical_water_grounding_engine_v2",
@@ -404,21 +409,28 @@ def _build_user_visual_cards(
                 "path": output_dir / "water_grounding_mask.png",
                 "label": "EVIDENCE HIGHLIGHT (PRIMARY WATER BODY)",
                 "caption": "Isolated contiguous water body matching visual and spatial evidence.",
-                "legend": "Cyan = Primary Water Body | Dark = Non-Water",
+                "legend": "Dark Blue = Primary Water Body | Dark = Non-Water",
             })
         elif (output_dir / "water_mask.png").exists():
             cards.append({
                 "path": output_dir / "water_mask.png",
                 "label": "EVIDENCE HIGHLIGHT (WATER EXTENT)",
                 "caption": "All surface water clusters identified in the scene.",
-                "legend": "Blue = Water Surface | Dark = Non-water",
+                "legend": "Dark Blue = Water Surface | Dark = Non-water",
+            })
+        if (output_dir / "water_probability.png").exists():
+            cards.append({
+                "path": output_dir / "water_probability.png",
+                "label": "CALIBRATED WATER PROBABILITY",
+                "caption": "SatlasWaterNet deep learning model posterior probability heatmap (0.0 to 1.0).",
+                "legend": "Dark Blue = High Probability Water | Red/Orange = Land/Shadow",
             })
         if (output_dir / "ndwi.png").exists():
             cards.append({
                 "path": output_dir / "ndwi.png",
                 "label": "WATER INDEX HEATMAP",
                 "caption": "Normalized water confidence index field.",
-                "legend": "Brighter Cyan = Stronger Water Indication",
+                "legend": "Dark Blue / Deep Tone = Stronger Water Indication",
             })
 
     # 2. Bi-Temporal Change Workflow
@@ -483,8 +495,33 @@ def _build_user_visual_cards(
                 "legend": "Cyan = Verified Consensus Area",
             })
 
-    # 4. Land Cover Breakdown Workflow
-    elif (output_dir / "land_cover_mask.png").exists() or (output_dir / "land_cover_classified.png").exists() or task == "spectral_analysis":
+    # 4. Building Footprint & Count Workflow
+    elif (output_dir / "building_instances_dl.png").exists() or (output_dir / "building_footprint_dl.png").exists() or (output_dir / "dl_buildings").exists() or task == "building_detection" or "building" in str(query).lower():
+        if (output_dir / "preview_1.png").exists():
+            cards.append({
+                "path": output_dir / "preview_1.png",
+                "label": "ORIGINAL IMAGE",
+                "caption": "Source optical scene submitted for building footprint analysis.",
+                "legend": "Natural true-color RGB baseline",
+            })
+        bld_inst = output_dir / "building_instances_dl.png" if (output_dir / "building_instances_dl.png").exists() else (output_dir / "building_grounding_mask.png")
+        if bld_inst.exists():
+            cards.append({
+                "path": bld_inst,
+                "label": "DELINEATED BUILDING FOOTPRINTS",
+                "caption": "Separated individual building instances with precise geometric perimeters.",
+                "legend": "Unique Colors = Buildings | White = Building Boundary",
+            })
+        if (output_dir / "building_footprint_dl.png").exists():
+            cards.append({
+                "path": output_dir / "building_footprint_dl.png",
+                "label": "BUILDING DETECTION PROBABILITY",
+                "caption": "SatlasBuildingNet SwinV2-B + FPN posterior building footprint heatmap.",
+                "legend": "Warm Red/Orange = High Building Probability",
+            })
+
+    # 5. Land Cover Breakdown Workflow
+    elif (output_dir / "land_cover_mask.png").exists() or (output_dir / "landcover_dl_mask.png").exists() or (output_dir / "land_cover_classified.png").exists() or task == "spectral_analysis" or task == "land_cover":
         if (output_dir / "preview_1.png").exists():
             cards.append({
                 "path": output_dir / "preview_1.png",
@@ -492,19 +529,28 @@ def _build_user_visual_cards(
                 "caption": "Source optical scene submitted for land cover analysis.",
                 "legend": "True-color RGB optical imagery",
             })
-        if (output_dir / "land_cover_mask.png").exists():
+        lc_grounding = output_dir / "landcover_dl_grounding.png" if (output_dir / "landcover_dl_grounding.png").exists() else (output_dir / "land_cover_grounding_mask.png")
+        if lc_grounding.exists():
             cards.append({
-                "path": output_dir / "land_cover_mask.png",
+                "path": lc_grounding,
+                "label": "LAND COVER GROUNDING OVERLAY",
+                "caption": "Class-partitioned surface composition with delineated parcel boundaries.",
+                "legend": "Dark Blue=Water | Bright Green=Grass | Dark Green=Forest | Dark Yellow=Land | Yellow=Road | Red=Buildings",
+            })
+        lc_mask = output_dir / "landcover_dl_mask.png" if (output_dir / "landcover_dl_mask.png").exists() else (output_dir / "land_cover_mask.png")
+        if lc_mask.exists():
+            cards.append({
+                "path": lc_mask,
                 "label": "LAND COVER CLASSIFICATION",
-                "caption": "6-class biophysical land cover distribution map.",
-                "legend": "Green=Veg | Emerald=Forest | Blue=Water | Red=Built-up | Brown=Bare",
+                "caption": "Multispectral & deep learning biophysical land cover distribution map.",
+                "legend": "Dark Blue=Water | Bright Green=Grass | Dark Green=Forest | Dark Yellow=Land | Yellow=Road | Red=Buildings",
             })
         elif (output_dir / "land_cover_classified.png").exists():
             cards.append({
                 "path": output_dir / "land_cover_classified.png",
                 "label": "LAND COVER CLASSIFICATION",
-                "caption": "6-class biophysical land cover distribution map.",
-                "legend": "Green=Dense Veg | Lt Green=Sparse Veg | Blue=Water | Orange=Built-up",
+                "caption": "Multispectral biophysical land cover distribution map.",
+                "legend": "Dark Blue=Water | Bright Green=Grass | Dark Yellow=Land | Yellow=Road | Red=Buildings",
             })
 
     # 5. RemoteCLIP Semantic Retrieval Workflow
@@ -537,14 +583,14 @@ def _build_user_visual_cards(
                 "legend": "Natural color optical baseline",
             })
         for fname, lbl, leg in [
-            ("water_grounding_mask.png", "EVIDENCE HIGHLIGHT", "Cyan = Detected Feature"),
+            ("water_grounding_mask.png", "EVIDENCE HIGHLIGHT", "Dark Blue = Detected Water"),
             ("change_mask.png", "DETECTED CHANGE", "Red = Surface Change"),
             ("semantic_change_mask.png", "DETECTED CHANGE", "Colored = Classified Change"),
             ("difference_map.png", "DIFFERENCE INTENSITY", "Brighter = Greater Difference"),
             ("tile_retrieval/remoteclip_top_tiles_mosaic.png", "RETRIEVAL EVIDENCE", "Retrieved Tiles"),
             ("remoteclip_top_tiles_mosaic.png", "RETRIEVAL EVIDENCE", "Retrieved Tiles"),
             ("ndvi.png", "SPECTRAL VEGETATION INDEX", "Green = Vegetation"),
-            ("ndwi.png", "SPECTRAL WATER INDEX", "Cyan = Water"),
+            ("ndwi.png", "SPECTRAL WATER INDEX", "Dark Blue = Water"),
         ]:
             p = output_dir / fname
             if p.exists():

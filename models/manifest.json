@@ -1,0 +1,211 @@
+{
+  "models_dir": "D:\\Sat1\\models",
+  "updated_at": "2026-09-09T09:08:16Z",
+  "categories": {
+    "remoteclip": {
+      "file_count": 3,
+      "files": [
+        {
+          "filename": "RemoteCLIP-RN50.pt",
+          "rel_path": "remoteclip/RemoteCLIP-RN50.pt",
+          "size_bytes": 408397807,
+          "size_human": "389.5 MB"
+        },
+        {
+          "filename": "RemoteCLIP-ViT-B-32.pt",
+          "rel_path": "remoteclip/RemoteCLIP-ViT-B-32.pt",
+          "size_bytes": 605208421,
+          "size_human": "577.2 MB"
+        },
+        {
+          "filename": "RemoteCLIP-ViT-L-14.pt",
+          "rel_path": "remoteclip/RemoteCLIP-ViT-L-14.pt",
+          "size_bytes": 1710613765,
+          "size_human": "1.59 GB"
+        }
+      ]
+    },
+    "croma": {
+      "file_count": 2,
+      "files": [
+        {
+          "filename": "CROMA_base.pt",
+          "rel_path": "croma/CROMA_base.pt",
+          "size_bytes": 777563846,
+          "size_human": "741.5 MB"
+        },
+        {
+          "filename": "CROMA_large.pt",
+          "rel_path": "croma/CROMA_large.pt",
+          "size_bytes": 2690426614,
+          "size_human": "2.51 GB"
+        }
+      ]
+    },
+    "change_detection": {
+      "file_count": 6,
+      "files": [
+        {
+          "filename": "ban_vit-l14-clip_mit-b0_512x512_40k_levircd.pth",
+          "rel_path": "change_detection/opencd/LEVIR-CD/ban_vit-l14-clip_mit-b0_512x512_40k_levircd.pth",
+          "size_bytes": 971852728,
+          "size_human": "926.8 MB"
+        },
+        {
+          "filename": "bit_r18_256x256_40k_levircd.pth",
+          "rel_path": "change_detection/opencd/LEVIR-CD/bit_r18_256x256_40k_levircd.pth",
+          "size_bytes": 40565347,
+          "size_human": "38.7 MB"
+        },
+        {
+          "filename": "changeformer_mit-b0_256x256_40k_levircd.pth",
+          "rel_path": "change_detection/opencd/LEVIR-CD/changeformer_mit-b0_256x256_40k_levircd.pth",
+          "size_bytes": 51655257,
+          "size_human": "49.3 MB"
+        },
+        {
+          "filename": "ChangerEx_r18-512x512_40k_levircd.pth",
+          "rel_path": "change_detection/opencd/LEVIR-CD/ChangerEx_r18-512x512_40k_levircd.pth",
+          "size_bytes": 136880383,
+          "size_human": "130.5 MB"
+        },
+        {
+          "filename": "levir_best.pth",
+          "rel_path": "change_detection/tinycd/levir_best.pth",
+          "size_bytes": 1276499,
+          "size_human": "1.2 MB"
+        },
+        {
+          "filename": "whu_best.pth",
+          "rel_path": "change_detection/tinycd/whu_best.pth",
+          "size_bytes": 1276627,
+          "size_human": "1.2 MB"
+        }
+      ]
+    },
+    "earthdial": {
+      "file_count": 19,
+      "files": [
+        {
+          "filename": "added_tokens.json",
+          "rel_path": "earthdial/EarthDial_4B_MS/added_tokens.json",
+          "size_bytes": 829,
+          "size_human": "829 B"
+        },
+        {
+          "filename": "all_results.json",
+          "rel_path": "earthdial/EarthDial_4B_MS/all_results.json",
+          "size_bytes": 200,
+          "size_human": "200 B"
+        },
+        {
+          "filename": "config.json",
+          "rel_path": "earthdial/EarthDial_4B_MS/config.json",
+          "size_bytes": 8169,
+          "size_human": "8.0 KB"
+        },
+        {
+          "filename": "generation_config.json",
+          "rel_path": "earthdial/EarthDial_4B_MS/generation_config.json",
+          "size_bytes": 122,
+          "size_human": "122 B"
+        },
+        {
+          "filename": "model-00001-of-00002.safetensors",
+          "rel_path": "earthdial/EarthDial_4B_MS/model-00001-of-00002.safetensors",
+          "size_bytes": 4957484336,
+          "size_human": "4.62 GB"
+        },
+        {
+          "filename": "model-00002-of-00002.safetensors",
+          "rel_path": "earthdial/EarthDial_4B_MS/model-00002-of-00002.safetensors",
+          "size_bytes": 3336478024,
+          "size_human": "3.11 GB"
+        },
+        {
+          "filename": "model.safetensors.index.json",
+          "rel_path": "earthdial/EarthDial_4B_MS/model.safetensors.index.json",
+          "size_bytes": 48839,
+          "size_human": "47.7 KB"
+        },
+        {
+          "filename": "special_tokens_map.json",
+          "rel_path": "earthdial/EarthDial_4B_MS/special_tokens_map.json",
+          "size_bytes": 1002,
+          "size_human": "1002 B"
+        },
+        {
+          "filename": "tokenizer.model",
+          "rel_path": "earthdial/EarthDial_4B_MS/tokenizer.model",
+          "size_bytes": 499723,
+          "size_human": "488.0 KB"
+        },
+        {
+          "filename": "tokenizer_config.json",
+          "rel_path": "earthdial/EarthDial_4B_MS/tokenizer_config.json",
+          "size_bytes": 7827,
+          "size_human": "7.6 KB"
+        },
+        {
+          "filename": "zero_to_fp32.py",
+          "rel_path": "earthdial/EarthDial_4B_MS/zero_to_fp32.py",
+          "size_bytes": 25314,
+          "size_human": "24.7 KB"
+        },
+        {
+          "filename": "added_tokens.json",
+          "rel_path": "earthdial/EarthDial_4B_RGB/added_tokens.json",
+          "size_bytes": 829,
+          "size_human": "829 B"
+        },
+        {
+          "filename": "config.json",
+          "rel_path": "earthdial/EarthDial_4B_RGB/config.json",
+          "size_bytes": 8150,
+          "size_human": "8.0 KB"
+        },
+        {
+          "filename": "generation_config.json",
+          "rel_path": "earthdial/EarthDial_4B_RGB/generation_config.json",
+          "size_bytes": 122,
+          "size_human": "122 B"
+        },
+        {
+          "filename": "inference.py",
+          "rel_path": "earthdial/EarthDial_4B_RGB/inference.py",
+          "size_bytes": 2371,
+          "size_human": "2.3 KB"
+        },
+        {
+          "filename": "model.safetensors.index.json",
+          "rel_path": "earthdial/EarthDial_4B_RGB/model.safetensors.index.json",
+          "size_bytes": 48839,
+          "size_human": "47.7 KB"
+        },
+        {
+          "filename": "special_tokens_map.json",
+          "rel_path": "earthdial/EarthDial_4B_RGB/special_tokens_map.json",
+          "size_bytes": 1002,
+          "size_human": "1002 B"
+        },
+        {
+          "filename": "tokenizer.model",
+          "rel_path": "earthdial/EarthDial_4B_RGB/tokenizer.model",
+          "size_bytes": 499723,
+          "size_human": "488.0 KB"
+        },
+        {
+          "filename": "tokenizer_config.json",
+          "rel_path": "earthdial/EarthDial_4B_RGB/tokenizer_config.json",
+          "size_bytes": 7827,
+          "size_human": "7.6 KB"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total_files": 30,
+    "total_bytes": 15690840542,
+    "total_size_human": "14.61 GB"
+  }
+}

@@ -1,0 +1,337 @@
+{
+  "result_id": "3dd2fbe9",
+  "task_plan": {
+    "task": "grounding",
+    "application": "single_image",
+    "specific_task": "water_grounding",
+    "sub_tasks": [
+      "water_analysis"
+    ],
+    "multi_intent": false,
+    "target": "water",
+    "asks_direction": false,
+    "tools": [
+      "raster_validator",
+      "optical_water_grounding_engine",
+      "ndwi_spectral",
+      "remoteclip",
+      "gis_metrics",
+      "geoproof_arbiter"
+    ],
+    "reason": "Natural language request asks to locate, highlight or analyze water bodies.",
+    "aoi_text": null,
+    "years": []
+  },
+  "mode": "deterministic_geospatial",
+  "assets": [
+    {
+      "filename": "sample.tif",
+      "width": 256,
+      "height": 256,
+      "bands": 3,
+      "dtype": "uint8",
+      "crs": "EPSG:3857",
+      "bounds": [
+        0.0,
+        0.0,
+        2560.0,
+        2560.0
+      ],
+      "resolution": [
+        10.0,
+        10.0
+      ],
+      "nodata": null,
+      "nodata_percent": 0.0,
+      "band_names": [
+        "band_1",
+        "band_2",
+        "band_3"
+      ],
+      "available_indices": [],
+      "source_format": "raster"
+    }
+  ],
+  "quality": {
+    "score": 0.96,
+    "compatible": true,
+    "blockers": [],
+    "warnings": [
+      "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+    ],
+    "checks": {
+      "file_count": 1,
+      "geospatial": true
+    }
+  },
+  "evidence": [
+    {
+      "kind": "water_grounding_evidence",
+      "producer": "satquery_waternet_swinv2",
+      "summary": "Identified and grounded the primary water body located in the northern (upper) and western (left) sector: 2.32% scene coverage (15.1 ha) spanning 1,521 pixels using SatlasWaterNet deep learning segmentation (Swin-v2 + spectral fusion).",
+      "confidence": 0.904,
+      "artifact_url": "/artifacts/3dd2fbe9/water_grounding_mask.png",
+      "metrics": {
+        "target": "water",
+        "water_body_identified": true,
+        "is_spectral": false,
+        "is_deep_learning": true,
+        "dl_consensus": false,
+        "location_description": "northern (upper) and western (left) sector",
+        "grounding_task": "largest_water_body",
+        "largest_coverage_percent": 2.32,
+        "total_coverage_percent": 2.32,
+        "area_m2": 151081.772,
+        "total_area_m2": 151081.772,
+        "region_count": 1,
+        "primary_bbox": [
+          0.0039,
+          0.0,
+          0.9961,
+          0.9961
+        ],
+        "largest_pixel_count": 1521,
+        "model_metrics": {
+          "precision": 0.9209026999318032,
+          "recall": 0.7625802115746306,
+          "f1": 0.834296767675814,
+          "iou": 0.7157025429297199,
+          "specificity": 0.9931365170414005,
+          "balanced_accuracy": 0.8778583643080156,
+          "dark_land_fpr": 0.005988187308963608,
+          "threshold": 0.5999999999999999,
+          "min_area_pixels": 16,
+          "primary_mean_probability": 0.839
+        }
+      },
+      "supports_claim": true,
+      "confidence_source": "producer_score"
+    },
+    {
+      "kind": "remoteclip_tile_retrieval",
+      "producer": "remoteclip_semantic_grounding_v2",
+      "summary": "Evaluated 1 candidate blocks; no block met the semantic relevance threshold (0.70). Safe abstention triggered.",
+      "confidence": 0.35,
+      "artifact_url": "/artifacts/3dd2fbe9/tile_retrieval/remoteclip_top_tiles_mosaic.png",
+      "metrics": {
+        "total_candidate_tiles": 1,
+        "relevant_matching_regions": 0,
+        "excluded_regions": 1,
+        "relevance_threshold": 0.7,
+        "mean_similarity": 0.0,
+        "max_similarity": 0.15
+      },
+      "supports_claim": false,
+      "confidence_source": "producer_score"
+    }
+  ],
+  "verdict": {
+    "status": "supported",
+    "answer": "Water covers approximately 2% of the image, located in the northern and western sector.",
+    "confidence": 0.678,
+    "confidence_kind": "evidence_weighted_spatial_ensemble_v2",
+    "contradictions": [],
+    "limitations": [
+      "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+    ],
+    "confidence_breakdown": {
+      "input_quality": 0.96,
+      "spatial_alignment": 0.9,
+      "evidence_strength": 0.627,
+      "ensemble_agreement": 0.446,
+      "model_probability": null,
+      "warning_penalty": 0.04,
+      "final_score": 0.6585,
+      "is_calibrated": true,
+      "calibration_mode": "temperature_scaled_platt",
+      "confidence_interval": [
+        0.419,
+        0.899
+      ],
+      "expected_calibration_error": 0.042
+    }
+  },
+  "trace": [
+    {
+      "step": 1,
+      "component": "typed_planner",
+      "action": "Compiled grounding",
+      "status": "ok",
+      "duration_ms": 1,
+      "details": {
+        "tools": [
+          "raster_validator",
+          "optical_water_grounding_engine",
+          "ndwi_spectral",
+          "remoteclip",
+          "gis_metrics",
+          "geoproof_arbiter"
+        ],
+        "reason": "Natural language request asks to locate, highlight or analyze water bodies.",
+        "target": "water"
+      }
+    },
+    {
+      "step": 2,
+      "component": "raster_validator",
+      "action": "Validated file headers, CRS, NoData, and compatibility",
+      "status": "ok",
+      "duration_ms": 43,
+      "details": {
+        "score": 0.96,
+        "compatible": true,
+        "blockers": [],
+        "warnings": [
+          "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+        ],
+        "checks": {
+          "file_count": 1,
+          "geospatial": true
+        }
+      }
+    },
+    {
+      "step": 3,
+      "component": "water_grounding_engine",
+      "action": "Executed SatlasWaterNet deep learning water delineation with calibrated confidence",
+      "status": "ok",
+      "duration_ms": 8474,
+      "details": {
+        "region_count": 1,
+        "largest_coverage_percent": 2.32,
+        "water_body_identified": true,
+        "dl_consensus": false,
+        "producer": "satquery_waternet_swinv2"
+      }
+    },
+    {
+      "step": 4,
+      "component": "remoteclip_retriever",
+      "action": "Executed RemoteCLIP semantic relevance filtering and spatial grouping",
+      "status": "warning",
+      "duration_ms": 2690,
+      "details": {
+        "total_candidates": 1,
+        "relevant_matching": 0,
+        "excluded": 1,
+        "relevance_threshold": 0.7,
+        "max_similarity": 0.15
+      }
+    },
+    {
+      "step": 5,
+      "component": "geoproof",
+      "action": "Applied multi-witness evidence verification and calibrated confidence estimation",
+      "status": "supported",
+      "duration_ms": 0,
+      "details": {
+        "confidence_kind": "evidence_weighted_spatial_ensemble_v2",
+        "evidence_count": 2
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "preview_1.png",
+      "url": "/artifacts/3dd2fbe9/preview_1.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "tiles_1_manifest.json",
+      "url": "/artifacts/3dd2fbe9/preprocess_1/tiles_manifest.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "water_mask.png",
+      "url": "/artifacts/3dd2fbe9/water_mask.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "water_grounding_mask.png",
+      "url": "/artifacts/3dd2fbe9/water_grounding_mask.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "ndwi.png",
+      "url": "/artifacts/3dd2fbe9/ndwi.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "water_probability.png",
+      "url": "/artifacts/3dd2fbe9/water_probability.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "water_regions.geojson",
+      "url": "/artifacts/3dd2fbe9/water_regions.geojson",
+      "mime_type": "application/geo+json"
+    },
+    {
+      "name": "remoteclip_top_tiles_mosaic.png",
+      "url": "/artifacts/3dd2fbe9/tile_retrieval/remoteclip_top_tiles_mosaic.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "remoteclip_top_rois.geojson",
+      "url": "/artifacts/3dd2fbe9/tile_retrieval/remoteclip_top_rois.geojson",
+      "mime_type": "application/geo+json"
+    },
+    {
+      "name": "remoteclip_retrieval_manifest.json",
+      "url": "/artifacts/3dd2fbe9/tile_retrieval/remoteclip_retrieval_manifest.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "GeoProof_Report.pdf",
+      "url": "/artifacts/3dd2fbe9/GeoProof_Report.pdf",
+      "mime_type": "application/pdf"
+    }
+  ],
+  "query": "Find water.",
+  "generated_at": "2026-09-24T18:20:04.881376+00:00",
+  "preprocessing": [
+    {
+      "filename": "sample.tif",
+      "source_format": "raster",
+      "selected_variable": null,
+      "available_variables": [],
+      "tile_size": 448,
+      "overlap": 64,
+      "total_candidate_tiles": 1,
+      "materialized_tiles": 1,
+      "complete_coverage": true,
+      "normalization": "per-band percentile 2-98 to uint8",
+      "manifest_url": "/artifacts/3dd2fbe9/preprocess_1/tiles_manifest.json"
+    }
+  ],
+  "summary": {
+    "title": "WATER DETECTION",
+    "headline": "Water covers approximately 2% of the image, located in the northern and western sector.",
+    "metrics": [
+      {
+        "label": "Water Coverage",
+        "value": "2%",
+        "icon": "\ud83d\udca7"
+      },
+      {
+        "label": "Detected Area",
+        "value": "15.1 ha",
+        "icon": "\ud83d\udcd0"
+      },
+      {
+        "label": "Water Bodies",
+        "value": "1",
+        "icon": "\ud83c\udf0a"
+      },
+      {
+        "label": "Confidence",
+        "value": "68%",
+        "icon": "\u2713"
+      }
+    ],
+    "explanation": "Approximately 2% of the image contains water. The largest detected water region covers 2% of the image and is located in the northern and western sector.",
+    "detected_changes": [],
+    "confidence_percent": 68,
+    "is_insufficient": false
+  }
+}

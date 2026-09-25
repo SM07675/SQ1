@@ -124,4 +124,89 @@ export async function fetchResultById(resultId: string): Promise<AnalysisRespons
   return response.json() as Promise<AnalysisResponse>;
 }
 
+export async function fetchChats(): Promise<import("./types").ChatSummary[]> {
+  const response = await fetch(`${API_BASE}/api/v1/chats`);
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function createChat(title?: string): Promise<import("./types").ChatSummary> {
+  const response = await fetch(`${API_BASE}/api/v1/chats`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(title ? { title } : {}),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to create chat (HTTP ${response.status})`);
+  }
+  return response.json();
+}
+
+export async function fetchChatDetail(chatId: string): Promise<import("./types").ChatDetail> {
+  const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to load chat ${chatId} (HTTP ${response.status})`);
+  }
+  return response.json();
+}
+
+export async function renameChat(chatId: string, title: string): Promise<import("./types").ChatSummary> {
+  const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to rename chat (HTTP ${response.status})`);
+  }
+  return response.json();
+}
+
+export async function deleteChat(chatId: string): Promise<{ status: string; deleted: boolean }> {
+  const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to delete chat (HTTP ${response.status})`);
+  }
+  return response.json();
+}
+
+export async function sendChatMessage(input: {
+  chatId: string;
+  query: string;
+  pairType?: string;
+  imageA?: File;
+  imageB?: File;
+}): Promise<import("./types").ChatMessageRecord> {
+  const body = new FormData();
+  body.set("query", input.query);
+  if (input.pairType) body.set("pair_type", input.pairType);
+  if (input.imageA) body.set("image_a", input.imageA);
+  if (input.imageB) body.set("image_b", input.imageB);
+
+  const response = await fetch(`${API_BASE}/api/v1/chats/${input.chatId}/messages`, {
+    method: "POST",
+    body,
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
+    throw new Error(payload?.detail ?? `Chat message failed with HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchSpatialGeometries(resultId: string): Promise<import("./types").SpatialGeometryRecord[]> {
+  const response = await fetch(`${API_BASE}/api/v1/spatial/geometries?result_id=${encodeURIComponent(resultId)}`);
+  if (!response.ok) return [];
+  return response.json();
+}
+
+export async function fetchModelStatus(): Promise<{ model_root: string; models: ModelCapability[] }> {
+  const response = await fetch(`${API_BASE}/api/v1/models/status`);
+  if (!response.ok) return { model_root: "", models: [] };
+  return response.json();
+}
+
+
 

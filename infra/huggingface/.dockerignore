@@ -1,0 +1,11 @@
+.git
+.gitattributes
+*.md
+!README.md
+__pycache__
+*.pyc
+.pytest_cache
+*.sqlite3
+artifacts
+tests
+tests_integrated

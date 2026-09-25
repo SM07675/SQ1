@@ -31,7 +31,9 @@ def test_spatial_geometry_indexing_and_bbox_query(tmp_path: Path):
             }
         ],
     }
-    (out_dir / "water_regions.geojson").write_text(json.dumps(geojson_data), encoding="utf-8")
+    nested_dir = out_dir / "surface_context" / "water_0"
+    nested_dir.mkdir(parents=True)
+    (nested_dir / "water_regions.geojson").write_text(json.dumps(geojson_data), encoding="utf-8")
 
     payload = {
         "result_id": result_id,
@@ -46,6 +48,10 @@ def test_spatial_geometry_indexing_and_bbox_query(tmp_path: Path):
     assert len(geoms) == 1
     assert geoms[0]["evidence_kind"] == "water_body"
     assert geoms[0]["area_m2"] == 250000.0
+
+    # Re-saving a result must refresh, rather than duplicate, its map features.
+    repo.save_result(result_id, payload, "2026-08-27T12:00:00Z", output_dir=out_dir)
+    assert len(repo.query_geometries(result_id=result_id)) == 1
 
     # Query with matching BBOX
     match_bbox = repo.query_geometries(bbox=(499900, 2199900, 500600, 2200600))

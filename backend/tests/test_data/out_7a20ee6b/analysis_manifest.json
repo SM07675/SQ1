@@ -1,0 +1,370 @@
+{
+  "result_id": "7a20ee6b",
+  "task_plan": {
+    "task": "scene_description",
+    "application": "single_image",
+    "specific_task": "scene_description",
+    "sub_tasks": [
+      "scene_description"
+    ],
+    "multi_intent": false,
+    "target": null,
+    "asks_direction": false,
+    "tools": [
+      "raster_validator",
+      "remoteclip",
+      "earthdial_4b_rgb",
+      "land_cover_engine",
+      "geoproof_arbiter"
+    ],
+    "reason": "Natural language request asks for comprehensive single-image scene description.",
+    "aoi_text": null,
+    "years": []
+  },
+  "mode": "scene_description",
+  "assets": [
+    {
+      "filename": "sample.tif",
+      "width": 256,
+      "height": 256,
+      "bands": 3,
+      "dtype": "uint8",
+      "crs": "EPSG:3857",
+      "bounds": [
+        0.0,
+        0.0,
+        2560.0,
+        2560.0
+      ],
+      "resolution": [
+        10.0,
+        10.0
+      ],
+      "nodata": null,
+      "nodata_percent": 0.0,
+      "band_names": [
+        "band_1",
+        "band_2",
+        "band_3"
+      ],
+      "available_indices": [],
+      "source_format": "raster"
+    }
+  ],
+  "quality": {
+    "score": 0.96,
+    "compatible": true,
+    "blockers": [],
+    "warnings": [
+      "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+    ],
+    "checks": {
+      "file_count": 1,
+      "geospatial": true
+    }
+  },
+  "evidence": [
+    {
+      "kind": "scene_description_evidence",
+      "producer": "geospatial_scene_comprehension_v2",
+      "summary": "Scene Overview: High-resolution satellite observation characterized predominantly by Water (57.88%). Surface composition confirms 2.4% vegetation canopy (2.41% dense forest), 7.33% built-up footprint, and 57.88% water bodies.",
+      "confidence": 0.91,
+      "artifact_url": "/artifacts/7a20ee6b/landcover_dl_grounding.png",
+      "metrics": {
+        "dominant_class": "water",
+        "breakdown": {
+          "unknown": {
+            "percent": 0.05,
+            "pixel_count": 31,
+            "mean_probability": 0.037,
+            "status": "Trace",
+            "color": "#787878"
+          },
+          "built-up": {
+            "percent": 7.33,
+            "pixel_count": 4803,
+            "mean_probability": 0.334,
+            "status": "Detected",
+            "color": "#f43f5e"
+          },
+          "vegetation": {
+            "percent": 2.4,
+            "pixel_count": 1576,
+            "mean_probability": 0.361,
+            "status": "Detected",
+            "color": "#10b981"
+          },
+          "cropland": {
+            "percent": 0.73,
+            "pixel_count": 481,
+            "mean_probability": 0.248,
+            "status": "Detected",
+            "color": "#eab308"
+          },
+          "bare soil": {
+            "percent": 0.0,
+            "pixel_count": 0,
+            "mean_probability": 0.0,
+            "status": "None",
+            "color": "#b48c64"
+          },
+          "water": {
+            "percent": 57.88,
+            "pixel_count": 37930,
+            "mean_probability": 0.178,
+            "status": "Dominant",
+            "color": "#0ea5e9"
+          },
+          "road or impervious surface": {
+            "percent": 31.61,
+            "pixel_count": 20715,
+            "mean_probability": 0.225,
+            "status": "Moderate",
+            "color": "#f97316"
+          }
+        },
+        "water_percent": 57.88,
+        "vegetation_percent": 2.4,
+        "built_up_percent": 7.33
+      },
+      "supports_claim": true,
+      "confidence_source": "producer_score"
+    },
+    {
+      "kind": "remoteclip_tile_retrieval",
+      "producer": "remoteclip_semantic_grounding_v2",
+      "summary": "Evaluated 1 candidate blocks; no block met the semantic relevance threshold (0.70). Safe abstention triggered.",
+      "confidence": 0.35,
+      "artifact_url": "/artifacts/7a20ee6b/tile_retrieval/remoteclip_top_tiles_mosaic.png",
+      "metrics": {
+        "total_candidate_tiles": 1,
+        "relevant_matching_regions": 0,
+        "excluded_regions": 1,
+        "relevance_threshold": 0.7,
+        "mean_similarity": 0.0,
+        "max_similarity": 0.5
+      },
+      "supports_claim": false,
+      "confidence_source": "producer_score"
+    }
+  ],
+  "verdict": {
+    "status": "supported",
+    "answer": "Scene Overview: High-resolution satellite observation characterized predominantly by Water (57.88%). Surface composition confirms 2.4% vegetation canopy (2.41% dense forest), 7.33% built-up footprint, and 57.88% water bodies.",
+    "confidence": 0.658,
+    "confidence_kind": "evidence_weighted_spatial_ensemble_v2",
+    "contradictions": [],
+    "limitations": [
+      "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+    ],
+    "confidence_breakdown": {
+      "input_quality": 0.96,
+      "spatial_alignment": 0.9,
+      "evidence_strength": 0.63,
+      "ensemble_agreement": 0.44,
+      "model_probability": null,
+      "warning_penalty": 0.04,
+      "final_score": 0.6583,
+      "is_calibrated": true,
+      "calibration_mode": "temperature_scaled_platt",
+      "confidence_interval": [
+        0.418,
+        0.898
+      ],
+      "expected_calibration_error": 0.042
+    }
+  },
+  "trace": [
+    {
+      "step": 1,
+      "component": "typed_planner",
+      "action": "Compiled scene_description",
+      "status": "ok",
+      "duration_ms": 1,
+      "details": {
+        "tools": [
+          "raster_validator",
+          "remoteclip",
+          "earthdial_4b_rgb",
+          "land_cover_engine",
+          "geoproof_arbiter"
+        ],
+        "reason": "Natural language request asks for comprehensive single-image scene description.",
+        "target": null
+      }
+    },
+    {
+      "step": 2,
+      "component": "raster_validator",
+      "action": "Validated file headers, CRS, NoData, and compatibility",
+      "status": "ok",
+      "duration_ms": 7,
+      "details": {
+        "score": 0.96,
+        "compatible": true,
+        "blockers": [],
+        "warnings": [
+          "sample.tif: no deterministic spectral index is available; name Red/Green/NIR/SWIR bands for NDVI/NDWI/NDBI"
+        ],
+        "checks": {
+          "file_count": 1,
+          "geospatial": true
+        }
+      }
+    },
+    {
+      "step": 3,
+      "component": "scene_description_engine",
+      "action": "Generated multi-modal scene description and land cover summary",
+      "status": "ok",
+      "duration_ms": 861,
+      "details": {
+        "dominant_class": "water"
+      }
+    },
+    {
+      "step": 4,
+      "component": "remoteclip_retriever",
+      "action": "Executed RemoteCLIP semantic relevance filtering and spatial grouping",
+      "status": "warning",
+      "duration_ms": 2611,
+      "details": {
+        "total_candidates": 1,
+        "relevant_matching": 0,
+        "excluded": 1,
+        "relevance_threshold": 0.7,
+        "max_similarity": 0.5
+      }
+    },
+    {
+      "step": 5,
+      "component": "geoproof",
+      "action": "Applied multi-witness evidence verification and calibrated confidence estimation",
+      "status": "supported",
+      "duration_ms": 0,
+      "details": {
+        "confidence_kind": "evidence_weighted_spatial_ensemble_v2",
+        "evidence_count": 2
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "name": "preview_1.png",
+      "url": "/artifacts/7a20ee6b/preview_1.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "tiles_1_manifest.json",
+      "url": "/artifacts/7a20ee6b/preprocess_1/tiles_manifest.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "landcover_dl_grounding.png",
+      "url": "/artifacts/7a20ee6b/landcover_dl_grounding.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "landcover_dl_mask.png",
+      "url": "/artifacts/7a20ee6b/landcover_dl_mask.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "builtup_dl_grounding.png",
+      "url": "/artifacts/7a20ee6b/builtup_dl_grounding.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "vegetation_dl_grounding.png",
+      "url": "/artifacts/7a20ee6b/vegetation_dl_grounding.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "cropland_dl_grounding.png",
+      "url": "/artifacts/7a20ee6b/cropland_dl_grounding.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "water_dl_grounding.png",
+      "url": "/artifacts/7a20ee6b/water_dl_grounding.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "road_dl_grounding.png",
+      "url": "/artifacts/7a20ee6b/road_dl_grounding.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "forest_dl_grounding.png",
+      "url": "/artifacts/7a20ee6b/forest_dl_grounding.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "land_dl_grounding.png",
+      "url": "/artifacts/7a20ee6b/land_dl_grounding.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "landcover_dl.geojson",
+      "url": "/artifacts/7a20ee6b/landcover_dl.geojson",
+      "mime_type": "application/geo+json"
+    },
+    {
+      "name": "remoteclip_top_tiles_mosaic.png",
+      "url": "/artifacts/7a20ee6b/tile_retrieval/remoteclip_top_tiles_mosaic.png",
+      "mime_type": "image/png"
+    },
+    {
+      "name": "remoteclip_top_rois.geojson",
+      "url": "/artifacts/7a20ee6b/tile_retrieval/remoteclip_top_rois.geojson",
+      "mime_type": "application/geo+json"
+    },
+    {
+      "name": "remoteclip_retrieval_manifest.json",
+      "url": "/artifacts/7a20ee6b/tile_retrieval/remoteclip_retrieval_manifest.json",
+      "mime_type": "application/json"
+    },
+    {
+      "name": "GeoProof_Report.pdf",
+      "url": "/artifacts/7a20ee6b/GeoProof_Report.pdf",
+      "mime_type": "application/pdf"
+    }
+  ],
+  "query": "Describe the scene.",
+  "generated_at": "2026-09-24T18:22:29.670237+00:00",
+  "preprocessing": [
+    {
+      "filename": "sample.tif",
+      "source_format": "raster",
+      "selected_variable": null,
+      "available_variables": [],
+      "tile_size": 448,
+      "overlap": 64,
+      "total_candidate_tiles": 1,
+      "materialized_tiles": 1,
+      "complete_coverage": true,
+      "normalization": "per-band percentile 2-98 to uint8",
+      "manifest_url": "/artifacts/7a20ee6b/preprocess_1/tiles_manifest.json"
+    }
+  ],
+  "summary": {
+    "title": "ANALYSIS SUMMARY",
+    "headline": "Scene Overview: High-resolution satellite observation characterized predominantly by Water (57.88%). Surface composition confirms 2.4% vegetation canopy (2.41% dense forest), 7.33% built-up footprint, and 57.88% water bodies.",
+    "metrics": [
+      {
+        "label": "Confidence",
+        "value": "66%",
+        "icon": "\u2713"
+      },
+      {
+        "label": "Status",
+        "value": "Verified & Grounded",
+        "icon": "\ud83d\udee1\ufe0f"
+      }
+    ],
+    "explanation": "Scene Overview: High-resolution satellite observation characterized predominantly by Water (57.88%). Surface composition confirms 2.4% vegetation canopy (2.41% dense forest), 7.33% built-up footprint, and 57.88% water bodies.",
+    "detected_changes": [],
+    "confidence_percent": 66,
+    "is_insufficient": false
+  }
+}

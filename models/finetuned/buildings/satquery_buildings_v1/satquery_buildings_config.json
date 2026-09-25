@@ -1,0 +1,35 @@
+{
+  "format_version": 1,
+  "task": "building_footprint_and_count",
+  "architecture": "SatlasBuildingNet",
+  "pretrained_model": "Aerial_SwinB_SI",
+  "input": {
+    "channels": "RGB",
+    "dtype": "uint8",
+    "scale": "divide_by_255",
+    "tile_size": 512,
+    "training_radiometry": "per-channel percentile stretch p2-p98"
+  },
+  "outputs": [
+    "footprint_logit",
+    "boundary_logit"
+  ],
+  "postprocess": {
+    "foot_thr": 0.6,
+    "boundary_thr": 0.6,
+    "min_area": 48,
+    "h_prominence": 6.0,
+    "min_distance": 8
+  },
+  "tile_inference": {
+    "overlap": 128,
+    "method": "Hann blend then global watershed"
+  },
+  "split": {
+    "AOI_2_Vegas": "train",
+    "AOI_4_Shanghai": "train",
+    "AOI_3_Paris": "val",
+    "AOI_5_Khartoum": "test"
+  },
+  "seed": 20260922
+}

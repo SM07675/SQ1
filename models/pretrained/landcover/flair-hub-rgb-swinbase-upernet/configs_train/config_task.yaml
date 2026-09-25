@@ -1,0 +1,61 @@
+# SLURM
+
+paths :   
+
+    out_folder: '../'
+    out_model_name: 'FLAIR-HUB_LC-A_RGB_swinbase-upernet'
+
+    train_csv: '../TRAIN_FLAIR-INC.csv'
+    val_csv: '../VALID_FLAIR-INC.csv'
+    test_csv: '../TEST_FLAIR-INC.csv'
+    global_mtd_folder: '../GLOBAL_ALL_MTD/'
+    ckpt_model_path: ''
+
+
+tasks: 
+
+    train: True
+    train_tasks: 
+        init_weights_only_from_ckpt: False
+        resume_training_from_ckpt: False
+
+    predict: True
+    write_files: True
+    georeferencing_output: True
+
+    metrics_only: False
+
+hyperparams:
+
+    num_epochs: 150
+    batch_size: 5
+    seed: 2025
+    learning_rate: 0.00005
+
+    optimizer: adamw  #sgd, adam, adamw
+    optim_weight_decay: 0.01
+    optim_betas: [0.9, 0.999]
+
+    scheduler: one_cycle_lr #  [one_cycle_lr, reduce_on_plateau, cycle_then_plateau]
+    warmup_fraction: 0.2 #if using one_cycle_lr. [0-1]
+    plateau_patience: 5
+
+hardware:
+    accelerator: 'gpu'
+    num_nodes: 6
+    gpus_per_node: 4
+    strategy: 'ddp_find_unused_parameters_true'
+    num_workers: 10
+
+saving:   
+    ckpt_save_also_last: True
+    ckpt_weights_only: False
+    ckpt_monitor: 'val_miou'
+    ckpt_monitor_mode: 'max'
+    ckpt_earlystopping_patience: 20
+    cp_csv_and_conf_to_output: True
+    enable_progress_bar: True
+    progress_rate: 10
+
+    ckpt_verbose: True
+    verbose_config: False
