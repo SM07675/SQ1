@@ -58,16 +58,13 @@ app = FastAPI(
     description="Evidence-first spectral, temporal and optical-SAR geospatial analysis for SIH26167.",
     lifespan=lifespan,
 )
-configured_origins = list(settings.cors_origins)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=configured_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 
 @app.get("/artifacts/{result_id}/GeoProof_Report.pdf")
@@ -398,7 +395,7 @@ def create_chat(req: ChatCreateRequest) -> ChatSummaryItem:
 def get_chat(chat_id: str) -> ChatDetailResponse:
     chat = repository.get_chat(chat_id)
     if chat is None:
-        raise HTTPException(404, f"Chat not found: {chat_id}")
+        chat = repository.create_chat(chat_id, "New Analysis")
 
     db_images = repository.get_chat_images(chat_id)
     images = [
@@ -583,7 +580,98 @@ async def post_chat_message(
             result=response,
         )
 
-    # CASE 2: Follow-up question on existing image(s)
+    # CASE 2A: No image provided and conversation has no imagery yet -> Auto-bind sample satellite imagery
+    if not stored_paths:
+        workspace_root = Path(__file__).resolve().parent.parent.parent
+        data_dir = workspace_root / "data"
+        urban_sample = workspace_root / "urban_coastal_tmp.png"
+        demo_optical = data_dir / "demo_optical_water.tif"
+        demo_sar = data_dir / "demo_sar_water.tif"
+        demo_before = data_dir / "demo_before_multispectral.tif"
+        demo_after = data_dir / "demo_after_multispectral.tif"
+
+        is_bitemporal = (
+            pair_type == "bi_temporal" or
+            any(k in query.lower() for k in ("compare", "change", "changed", "before", "after", "difference", "temporal"))
+        )
+        is_sar = (
+            pair_type == "optical_sar" or
+            any(k in query.lower() for k in ("sar", "radar", "fusion", "croma"))
+        )
+
+        sample_pairs: list[tuple[str, Path]] = []
+        effective_pair_type = pair_type
+        if is_bitemporal and demo_before.exists() and demo_after.exists():
+            sample_pairs = [("demo_before.tif", demo_before), ("demo_after.tif", demo_after)]
+            effective_pair_type = "bi_temporal"
+        elif is_sar and demo_optical.exists() and demo_sar.exists():
+            sample_pairs = [("demo_optical.tif", demo_optical), ("demo_sar.tif", demo_sar)]
+            effective_pair_type = "optical_sar"
+        elif urban_sample.exists():
+            sample_pairs = [("coastal_urban_sample.png", urban_sample)]
+            effective_pair_type = "single"
+        elif demo_optical.exists():
+            sample_pairs = [("demo_optical_water.tif", demo_optical)]
+            effective_pair_type = "single"
+
+        if sample_pairs:
+            for idx, (filename, src_p) in enumerate(sample_pairs):
+                ext = src_p.suffix.lower()
+                dest_p = chat_dir / f"image_{idx + 1}{ext}"
+                shutil.copyfile(src_p, dest_p)
+                img_url = f"/artifacts/chats/{chat_id}/image_{idx + 1}{ext}"
+                img_id = str(uuid.uuid4())
+                repository.add_chat_image(img_id, chat_id, filename, dest_p, img_url)
+                stored_paths.append(dest_p)
+                user_msg_attachments.append({"name": filename, "url": img_url, "type": "image"})
+
+            user_msg_id = str(uuid.uuid4())
+            repository.add_chat_message(user_msg_id, chat_id, "user", query, attachments=user_msg_attachments)
+
+            result_id = str(uuid.uuid4())
+            output_dir = settings.artifact_dir / result_id
+            output_dir.mkdir(parents=True, exist_ok=True)
+            prepared_paths = [
+                prepare_source(path, output_dir / f"prepared_{index + 1}", netcdf_variable).raster_path
+                for index, path in enumerate(stored_paths)
+            ]
+            response = await analyze(
+                result_id=result_id,
+                query=query,
+                pair_type=effective_pair_type,
+                image_paths=prepared_paths,
+                output_dir=output_dir,
+            )
+            repository.save_result(result_id, response.model_dump(mode="json"), response.generated_at, output_dir=output_dir)
+
+            if chat["title"] in ("New Analysis", "Untitled"):
+                new_title = generate_chat_title(query, effective_pair_type, response)
+                repository.update_chat(chat_id, title=new_title)
+
+            asst_msg_id = str(uuid.uuid4())
+            assistant_content = response.verdict.answer
+            if response.summary and response.summary.explanation:
+                assistant_content = response.summary.explanation
+
+            asst_msg = repository.add_chat_message(
+                asst_msg_id,
+                chat_id,
+                "assistant",
+                assistant_content,
+                attachments=[],
+                result=response.model_dump(mode="json"),
+            )
+            return ChatMessageResponse(
+                message_id=asst_msg["message_id"],
+                chat_id=chat_id,
+                role="assistant",
+                content=asst_msg["content"],
+                created_at=asst_msg["created_at"],
+                attachments=[],
+                result=response,
+            )
+
+    # CASE 2B: Follow-up question on existing image(s)
     user_msg_id = str(uuid.uuid4())
     repository.add_chat_message(user_msg_id, chat_id, "user", query, attachments=[])
 

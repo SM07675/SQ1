@@ -1201,8 +1201,12 @@ def classify_land_cover_scene(
 
     total_pixels = out_h * out_w
 
-    # 1. Water mask with strict vegetation, grass & dark soil suppression
-    # Prevents land and vegetation from being falsely detected as water
+    # 1. Water mask with strict shadow, vegetation, grass & dark soil suppression
+    # Prevents shadows and vegetation from being falsely detected as water
+    local_mean_b = ndi.uniform_filter(brightness, size=21)
+    illum_drop = np.clip((local_mean_b - brightness) / np.maximum(local_mean_b, 0.04), 0.0, 1.0)
+    is_shadow = (illum_drop > 0.20) & ((edge_density > 0.03) | (brightness < 0.25))
+
     exg = 2.0 * g_norm - r_norm - b_norm
     is_vegetation = (exg > 0.03) | ((g_norm > b_norm * 1.30) & (g_norm > r_norm * 1.05))
     is_dark_soil = (r_norm > b_norm * 1.12) & (g_norm > b_norm * 0.95) & (brightness > 0.10)
@@ -1214,11 +1218,19 @@ def classify_land_cover_scene(
         ~is_vegetation &
         ~is_dark_soil &
         ~is_grass &
+        ~is_shadow &
         (brightness < 0.55) &
         (edge_density < 0.10)
     )
     struct_elem = ndi.generate_binary_structure(2, 2)
     water_mask = ndi.binary_closing(ndi.binary_opening(water_candidate, structure=struct_elem), structure=struct_elem)
+    # Filter tiny isolated false-positive shadow specks
+    w_labels, w_count = ndi.label(water_mask)
+    if w_count > 0:
+        w_sizes = np.bincount(w_labels.ravel())
+        w_keep = w_sizes >= 30
+        w_keep[0] = False
+        water_mask = w_keep[w_labels]
 
     # 2. Forest / Dense canopy (dark green)
     forest_mask = _denoise((ndvi >= 0.38) & ~water_mask)

@@ -30,8 +30,12 @@ function matchingArtifacts(result: AnalysisResponse): { original?: ArtifactRef; 
   const group = task === "land_cover" || (inferred && /\b(land|soil|cover|grass)\b/.test(query)) ? "land"
     : ["building_count", "building_detection", "buildings"].includes(task) || (inferred && /\b(buildings?|footprints?)\b/.test(query)) ? "building"
       : ["water_analysis", "water_detection"].includes(task) || (inferred && /\b(water|lake|river|flood)\b/.test(query)) ? "water" : "other";
-  const overlayNames = group === "land" ? ["land_cover_overlay.png", "land_only_overlay.png"]
-    : group === "building" ? ["buildings_overlay.png", "building_overlay.png"]
+  const prefersLandOnly = group === "land" && !/\b(water|lake|river|flood|ocean|sea|pond|waterbody)\b/.test(query);
+  const overlayNames = prefersLandOnly
+    ? ["land_only_overlay.png", "land_cover_overlay.png"]
+    : group === "land"
+      ? ["land_cover_overlay.png", "land_only_overlay.png"]
+      : group === "building" ? ["buildings_overlay.png", "building_overlay.png"]
       : group === "water" ? ["water_overlay.png"] : [];
   const vectorNames = group === "land" ? ["land_cover.geojson"]
     : group === "building" ? ["buildings.geojson"]
@@ -50,9 +54,10 @@ function validCollection(data: unknown): data is MapCollection {
 }
 
 const COLORS: Record<string, string> = {
-  water: "#2475cf", grass: "#29bd6c", forest: "#14704c", land: "#c4a346",
-  soil: "#c4a346", roads: "#ffd44e", road: "#ffd44e", built_up: "#ef5963",
-  building: "#ef5963", cropland: "#90bc54", vegetation: "#29bd6c",
+  water: "#2475cf", grass: "#29bd6c", forest: "#14704c", woodland: "#14704c", land: "#b49155",
+  soil: "#b49155", bare_pervious: "#b49155", roads: "#ffd44e", road: "#ffd44e", built_up: "#ef5963",
+  building: "#ef5963", cropland: "#90bc54", agriculture: "#90bc54", vegetation: "#29bd6c",
+  swimming_pool: "#06b6d4", snow: "#f0f8ff",
 };
 
 function featureColor(feature: GeoJSON.Feature): string {

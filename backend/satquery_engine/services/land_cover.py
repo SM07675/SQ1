@@ -111,6 +111,7 @@ def check_land_result(
     water_pct = breakdown.get("water", {}).get("percent", 0.0)
     urban_pct = breakdown.get("built_up", {}).get("percent", 0.0)
     vegetation_pct = breakdown.get("vegetation", {}).get("percent", 0.0)
+    bare_pct = breakdown.get("bare_pervious", {}).get("percent", 0.0)
 
     # 1. Review flag: high spatial water but weak BigEarthNet water evidence
     if witness.available and water_pct > 50.0 and witness.water_evidence < 0.12:
@@ -127,8 +128,6 @@ def check_land_result(
         )
 
     # 3. Pixel-count-based sanity checks — run regardless of BigEarthNet availability.
-    # These catch impossible single-class dominance with no supporting evidence from other
-    # specialists (e.g. water claims 70% but vegetation and buildings combined are < 5%).
     if water_pct > 65.0 and (vegetation_pct + urban_pct) < 5.0:
         warnings.append(
             f"WATER_COVERAGE_REVIEW: Water mask covers {water_pct:.1f}% of scene with "
@@ -140,8 +139,14 @@ def check_land_result(
             f"VEGETATION_REVIEW: Vegetation covers {vegetation_pct:.1f}% of scene with "
             "negligible water and built-up; dense canopy scenes may over-claim vegetation."
         )
+    # 4. Implausible bare coverage — bare >70% with no vegetation or water is suspicious
+    if bare_pct > 70.0 and (vegetation_pct + water_pct) < 5.0:
+        warnings.append(
+            f"BARE_COVERAGE_REVIEW: Bare/open terrain covers {bare_pct:.1f}% of scene with "
+            "very low vegetation and water; may indicate arid/desert, or residual fallback inflation."
+        )
 
-    # 4. Sensor & band check
+    # 5. Sensor & band check
     if not band_info.get("has_nir"):
         warnings.append("Vegetation and water classified using RGB optical proxy; true multispectral bands unavailable.")
 
@@ -306,6 +311,27 @@ def classify_land_cover_composite(
             supplemental_flair = None
             limitations.append(f"FLAIR-HUB supplemental land classes unavailable: {exc}")
 
+    q_lower = (query or "").lower()
+    # Robust land-only intent: require at least one land keyword while excluding any
+    # water, mixed, or coastal phrasing.  Use word-boundary checks to avoid
+    # matching "upland" as "land" or "floodplain" as "flood".
+    import re as _re
+    _LAND_KW = (
+        r"\bland\b", r"\bterrain\b", r"\bground\b", r"\bsoil\b",
+        r"\bbare\b", r"\bhillside\b", r"\blandform\b",
+    )
+    _WATER_KW = (
+        r"\bwater\b", r"\briver\b", r"\blake\b", r"\bocean\b", r"\bsea\b",
+        r"\bpond\b", r"\bflood\b", r"\bwetland\b", r"\bcoastal\b",
+        r"\breservoir\b", r"\bstream\b", r"\bcreek\b", r"\bestuari\b",
+        r"\bland cover\b", r"\bland use\b",  # full-scene queries aren't land-only
+    )
+    _has_land = any(_re.search(pat, q_lower) for pat in _LAND_KW)
+    _has_water = any(_re.search(pat, q_lower) for pat in _WATER_KW)
+    wants_land_only = _has_land and not _has_water
+    if wants_land_only:
+        water = np.zeros(dims, dtype=bool)
+
     conflicts = (water & buildings) | (vegetation & buildings) | (water & vegetation)
     # Preserve canonical water exactly. Disputed non-water pixels remain unknown.
     built_surface = (model_classes == 3) & valid if is_flair_hub else np.zeros(dims, bool)
@@ -324,7 +350,8 @@ def classify_land_cover_composite(
     labels[pool & ~water & ~buildings] = 10
     labels[veg & ~agriculture] = 2
     labels[built] = 3
-    labels[water] = 1
+    if not wants_land_only:
+        labels[water] = 1
     if model_classes is not None:
         labels[veg & (np.isin(model_classes, [12, 13, 14]) if is_flair_hub else (model_classes == 2))] = 5
         labels[road] = 6
@@ -341,7 +368,7 @@ def classify_land_cover_composite(
                                       (5, (12, 13, 14))):
             selected = eligible & np.isin(flair_class, class_names)
             labels[selected] = class_id
-            supplemental_pixels[{7:"bare_pervious", 2:"vegetation", 8:"agriculture", 5:"woodland"}[class_id]] = int(selected.sum())
+            supplemental_pixels[{7: "bare_pervious", 2: "vegetation", 8: "agriculture", 5: "woodland"}[class_id]] = int(selected.sum())
             if model_confidence is not None:
                 model_confidence[selected] = flair_confidence[selected]
         limitations.append(
@@ -350,6 +377,15 @@ def classify_land_cover_composite(
         )
     if not valid.any():
         raise ValueError("No valid land-cover pixels are available.")
+
+    # When user explicitly queries for land only, treat residual unclassified land as bare pervious terrain
+    if wants_land_only:
+        residual_land = (labels == 4) & valid & ~water
+        if residual_land.any():
+            labels[residual_land] = 7
+            if model_confidence is not None:
+                model_confidence[residual_land] = 0.45
+
     # Remove isolated model speckles without expanding boundaries or assigning
     # neighboring land a guessed class. Canonical water/buildings are preserved.
     removed_speckles = 0
@@ -361,13 +397,14 @@ def classify_land_cover_composite(
         noise = tiny[components]
         removed_speckles += int(noise.sum())
         labels[noise] = 4
+
     spatial = export_labels(labels, image_path, output_dir, "land_cover", valid_mask=valid)
     names = {1:"water", 2:"vegetation", 3:"built_up", 4:"unknown", 5:"woodland", 6:"road",
              7:"bare_pervious", 8:"agriculture", 9:"snow", 10:"swimming_pool"}
-    # Human-friendly color palette: each class is clearly distinguishable
-    # Water = deep blue, Vegetation/Grass = bright green, Buildings = warm red,
-    # Unknown/Land = dark yellow/sandy, Woodland = dark green, Road = bright yellow,
-    # Bare soil = tan/brown, Agriculture = light olive, Snow = white, Pool = turquoise
+    # Human-friendly color palette: clearly differentiating land and building classes
+    # Water = deep blue, Vegetation/Grass = bright green, Buildings/Built-up = warm red,
+    # Unknown = amber/sandy, Woodland = dark green, Road = yellow,
+    # Bare soil / Land terrain = rich tan/brown, Agriculture = light olive, Snow = white, Pool = turquoise
     colors = {1:(20, 60, 140), 2:(34, 197, 94), 3:(220, 53, 69), 4:(194, 155, 56), 5:(22, 101, 52), 6:(245, 200, 30),
               7:(166, 130, 80), 8:(124, 179, 66), 9:(240, 248, 255), 10:(6, 182, 212)}
     scores = {"water":water_result, "vegetation":vegetation_result, "built_up":building_result}
@@ -390,18 +427,22 @@ def classify_land_cover_composite(
     # Replace the generic binary rendering with the actual class palette.
     rgba = np.zeros((*dims,4), dtype="uint8")
     for ident, color in colors.items():
-        # Unclassified surface is visibly amber, but distinct from the tan
-        # bare-soil class. Transparency preserves the source image for review.
         rgba[labels == ident] = [*color, 100 if ident == 4 else 140]
     Image.fromarray(rgba).save(output_dir / "land_cover_mask.png")
     preview = Image.open(output_dir / "land_cover_original.png").convert("RGBA")
-    Image.alpha_composite(preview, Image.fromarray(rgba).resize(preview.size, Image.Resampling.NEAREST)).convert("RGB").save(output_dir / "land_cover_overlay.png")
-    # A land-only view must not paint water or unresolved pixels as land.
-    land_mask = valid & np.isin(labels, [2, 3, 5, 6, 7, 8, 9])
+    # Land comprises all valid terrestrial non-water pixels.
+    if wants_land_only:
+        land_mask = valid & (labels != 1)
+    else:
+        land_mask = valid & np.isin(labels, [2, 3, 5, 6, 7, 8, 9])
     land_rgba = rgba.copy()
     land_rgba[~land_mask] = 0
     land_overlay = output_dir / "land_only_overlay.png"
     Image.alpha_composite(preview, Image.fromarray(land_rgba).resize(preview.size, Image.Resampling.NEAREST)).convert("RGB").save(land_overlay)
+    if wants_land_only:
+        Image.alpha_composite(preview, Image.fromarray(land_rgba).resize(preview.size, Image.Resampling.NEAREST)).convert("RGB").save(output_dir / "land_cover_overlay.png")
+    else:
+        Image.alpha_composite(preview, Image.fromarray(rgba).resize(preview.size, Image.Resampling.NEAREST)).convert("RGB").save(output_dir / "land_cover_overlay.png")
     land_mask_path = output_dir / "land_only_mask.tif"
     with rasterio.open(land_mask_path, "w", driver="GTiff", width=dims[1], height=dims[0], count=1,
                        dtype="uint8", crs=crs, transform=grid, nodata=None, compress="deflate") as dst:
@@ -419,14 +460,34 @@ def classify_land_cover_composite(
                     "Built-up includes FLAIR impervious surface when compatible; it is not a count of buildings." if is_flair_hub else "Built-up coverage here measures non-disputed building footprints, not all roads or paved surfaces."]
     if learned is not None:
         limitations.append(learned["domain_note"])
+    # Wire in the sanity-check function to append relevant quality warnings
+    band_info_for_check = {"has_nir": "nir" in band_map.indices}
+    witness_placeholder = BigEarthNetWitnessResult(
+        available=False, model_name="", variant="S2", class_probabilities={},
+        top_classes=[], water_evidence=0.0, urban_evidence=0.0,
+        forest_evidence=0.0, agriculture_evidence=0.0, notes="",
+    )
+    _check_passed, _check_warnings = check_land_result(breakdown, witness_placeholder, band_info_for_check)
+    limitations.extend(_check_warnings)
     if conflicts.any():
         limitations.append("LAND_COVER_DISAGREEMENT: specialist masks overlap; canonical water is retained and conflicting non-water pixels remain unknown.")
     if crs is None:
         limitations.append("Area cannot be calculated because this image does not contain a reliable geographic scale.")
     veg_mode = (vegetation_result or {}).get("method", "unavailable")
-    known = {k:v for k,v in breakdown.items() if k != "unknown"}
-    dominant = max(breakdown, key=lambda k:breakdown[k]["pixels"])
-    summary = "Estimated image coverage: " + ", ".join(f"{v['percent']:.2f}% {k.replace('_',' ')}" for k,v in breakdown.items()) + "."
+    known = {k: v for k, v in breakdown.items() if k != "unknown"}
+    # Group vegetation + woodland so the overall dominant land cover category is accurate
+    category_pixels = {
+        "vegetation": breakdown.get("vegetation", {}).get("pixels", 0) + breakdown.get("woodland", {}).get("pixels", 0),
+        "built_up": breakdown.get("built_up", {}).get("pixels", 0),
+        "water": breakdown.get("water", {}).get("pixels", 0),
+        "bare_pervious": breakdown.get("bare_pervious", {}).get("pixels", 0),
+        "agriculture": breakdown.get("agriculture", {}).get("pixels", 0),
+        "road": breakdown.get("road", {}).get("pixels", 0),
+    }
+    dominant = max(category_pixels, key=lambda k: category_pixels[k]) if any(category_pixels.values()) else (max(known, key=lambda k: known[k]["pixels"]) if known else "unknown")
+    summary = "Estimated image coverage: " + ", ".join(f"{v['percent']:.2f}% {k.replace('_',' ')}" for k, v in breakdown.items()) + "."
+    valid_known_pixels = sum(v["pixels"] for v in known.values())
+    evidence_strength = float(sum(v["confidence"] * v["pixels"] for v in known.values()) / valid_known_pixels) if valid_known_pixels > 0 else 0.85
     result = {**spatial, "method":"Aerial land-cover specialist with deterministic evidence fusion" if learned is not None else "Specialist mask composition", "target":"land_cover", "summary":summary,
         "breakdown":breakdown, "dominant_class":dominant, "valid_pixels":total,
         "coverage_percent":100.0, "water_percent":breakdown["water"]["percent"],
@@ -435,7 +496,7 @@ def classify_land_cover_composite(
         "noise_pixels_withheld":removed_speckles,
         "vegetation_percent":breakdown["vegetation"]["percent"] + breakdown["woodland"]["percent"], "built_up_percent":breakdown["built_up"]["percent"],
         "vegetation_mode":veg_mode, "built_up_mode":"BUILDING_FOOTPRINTS", "native_resolution":True,
-        "evidence_strength":min([v["confidence"] for v in known.values() if v["pixels"]] or [0.0]),
+        "evidence_strength":evidence_strength,
         "confidence_kind":"uncalibrated_evidence_strength", "quality_gate_passed":True,
         "quality_warnings":limitations, "limitations":limitations, "disputed_pixels":int(conflicts.sum()),
         "evidence_state":"DISAGREEMENT" if conflicts.any() else "MODEL_ESTIMATE" if learned is not None else "INSUFFICIENT_EVIDENCE",

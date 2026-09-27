@@ -1,0 +1,33 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    image: satquery-backend:latest
+    container_name: satquery-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - SATQUERY_ENV=production
+      - SATQUERY_OFFLINE_MODE=false
+      - SATQUERY_CORS_ORIGINS=*
+      - SATQUERY_MAX_UPLOAD_MB=256
+      - SATQUERY_TILE_SIZE=448
+      - SATQUERY_TILE_OVERLAP=64
+      - SATQUERY_MAX_MODEL_TILES=64
+      - SATQUERY_ARTIFACT_DIR=/app/artifacts
+      - SATQUERY_DATABASE_PATH=/app/artifacts/satquery.sqlite3
+      - SATQUERY_DEVICE=cpu
+    volumes:
+      - satquery_artifacts:/app/artifacts
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  satquery_artifacts:
+    driver: local

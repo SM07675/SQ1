@@ -74,6 +74,8 @@ export interface ArtifactRef {
   name: string;
   url: string;
   mime_type: string;
+  artifact_id?: string;
+  role?: string;
 }
 
 export interface SummaryMetric {

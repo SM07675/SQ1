@@ -1,8 +1,9 @@
-# SatQuery Deployment Guide: Hugging Face & Vercel
+# SatQuery Deployment Guide
 
-This repository is configured for turnkey decoupled deployment:
-- **Backend API**: Hosted on **Hugging Face Spaces** (Docker SDK, FastAPI, Port 7860).
-- **Frontend Dashboard**: Hosted on **Vercel** (Vite + React Single Page Application).
+This repository supports turnkey decoupled deployment across multiple platforms:
+- **E2E Networks Cloud Deployment**: Follow **[DEPLOY_E2E_NETWORKS.md](file:///d:/SatQuery_AI_SIH26167_Complete_Prototype_v1.0/SatQuery_AI_SIH26167_Complete_Prototype_v1.0/SatQuery_AI_SIH26167_Prototype_v1.0/DEPLOY_E2E_NETWORKS.md)** for 1-click Linux VM / Docker deployment on E2E Networks compute.
+- **Modal + Vercel Deployment**: Follow **[DEPLOY_MODAL_VERCEL.md](file:///d:/SatQuery_AI_SIH26167_Complete_Prototype_v1.0/SatQuery_AI_SIH26167_Complete_Prototype_v1.0/SatQuery_AI_SIH26167_Prototype_v1.0/DEPLOY_MODAL_VERCEL.md)** for serverless ASGI backend on Modal (`modal_app.py`) and edge frontend on Vercel.
+- **Hugging Face Spaces + Vercel**: Documented below for Docker-based Space hosting.
 
 ---
 

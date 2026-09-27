@@ -32,7 +32,21 @@ def measure_cover(path, output, target, largest=False, strict=False):
 
     # Threshold selection: higher for RGB water proxy (prone to false positives)
     if target == "vegetation":
-        threshold = 0.2
+        # Adaptive threshold: use Otsu's method on the finite-value distribution.
+        # Clip to [0.12, 0.30] so we stay within defensible spectral territory.
+        finite_vals = values[np.isfinite(values)]
+        if finite_vals.size > 0:
+            hist, bin_edges = np.histogram(finite_vals, bins=200, range=(-1.0, 1.0))
+            bin_centres = (bin_edges[:-1] + bin_edges[1:]) / 2.0
+            w0_c = np.cumsum(hist)
+            w1_c = w0_c[-1] - w0_c
+            mu0_c = np.cumsum(hist * bin_centres) / np.maximum(w0_c, 1)
+            mu1_c = (np.cumsum((hist * bin_centres)[::-1])[::-1]) / np.maximum(w1_c, 1)
+            sigma_b = w0_c * w1_c * (mu0_c - mu1_c) ** 2
+            otsu_thresh = float(bin_centres[int(np.argmax(sigma_b))])
+            threshold = float(np.clip(otsu_thresh, 0.12, 0.30))
+        else:
+            threshold = 0.20
     elif target == "water" and not exact:
         threshold = 0.20   # RGB proxy needs balanced threshold to capture rivers without land noise
     else:
@@ -40,8 +54,27 @@ def measure_cover(path, output, target, largest=False, strict=False):
 
     mask = valid & (values > threshold)
 
+    # --- Vegetation-specific post-processing ---
+    quality_warnings: list[str] = []
+    if target == "vegetation":
+        total_valid = int(valid.sum())
+        struct_cross = ndimage.generate_binary_structure(2, 1)
+        mask = ndimage.binary_closing(mask, structure=struct_cross, iterations=1)
+        mask = ndimage.binary_opening(mask, structure=struct_cross, iterations=1)
+        # Sanity gate: if proxy says >60% vegetation, re-threshold stricter
+        veg_pct = mask.sum() / max(1, total_valid) * 100
+        if veg_pct > 60.0:
+            quality_warnings.append(
+                f"RGB vegetation proxy initially estimated {veg_pct:.1f}% coverage which is unusually high. "
+                "Applying adaptive strictness."
+            )
+            new_thresh = float(np.clip(threshold + 0.08, 0.20, 0.35))
+            mask = valid & (values > new_thresh)
+            mask = ndimage.binary_closing(mask, structure=struct_cross, iterations=1)
+            mask = ndimage.binary_opening(mask, structure=struct_cross, iterations=1)
+            threshold = new_thresh
+
     # --- Water-specific post-processing (RGB proxy only) ---
-    quality_warnings = []
     if target == "water" and not exact:
         total_valid = int(valid.sum())
 

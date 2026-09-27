@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   Sparkles,
-  GitCompare,
   Compass,
   FileText,
   Sun,
@@ -85,16 +84,6 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       icon: <Sparkles size={16} />,
       action: () => {
         onSelectTab("analyze");
-        onClose();
-      },
-    },
-    {
-      id: "cmd-compare",
-      title: "Compare Imagery",
-      subtitle: "Bi-temporal change & Optical + SAR fusion",
-      icon: <GitCompare size={16} />,
-      action: () => {
-        onSelectTab("compare");
         onClose();
       },
     },

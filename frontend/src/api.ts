@@ -8,6 +8,24 @@ import type {
 
 export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
+export async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
+  const primaryUrl = `${API_BASE}${path}`;
+  try {
+    const res = await fetch(primaryUrl, options);
+    if (res.status === 404 && API_BASE) {
+      console.warn(`[SatQuery API] Remote ${primaryUrl} returned 404, falling back to local: ${path}`);
+      return await fetch(path, options);
+    }
+    return res;
+  } catch (err) {
+    if (API_BASE) {
+      console.warn(`[SatQuery API] Remote ${primaryUrl} failed, falling back to local: ${path}`, err);
+      return await fetch(path, options);
+    }
+    throw err;
+  }
+}
+
 export function artifactUrl(path?: string | null): string | undefined {
   if (!path) return undefined;
   if (/^https?:\/\//.test(path)) return path;
@@ -20,7 +38,7 @@ export async function downloadPdfReport(resultId: string, customFilename?: strin
   if (!url) return;
 
   try {
-    const response = await fetch(url);
+    const response = await apiFetch(`/artifacts/${resultId}/GeoProof_Report.pdf`);
     if (!response.ok) {
       throw new Error(`Failed to download report (HTTP ${response.status})`);
     }
@@ -60,22 +78,22 @@ export async function analyzeImages(input: {
   body.set("image_a", input.imageA);
   if (input.imageB) body.set("image_b", input.imageB);
 
-  const response = await fetch(`${API_BASE}/api/v1/analyze`, { method: "POST", body });
+  const response = await apiFetch(`/api/v1/analyze`, { method: "POST", body });
   if (!response.ok) {
-    const payload = await response.json().catch(() => null) as { detail?: string } | null;
+    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
     throw new Error(payload?.detail ?? `Analysis failed with HTTP ${response.status}`);
   }
   return response.json() as Promise<AnalysisResponse>;
 }
 
 export async function modelCapabilities(): Promise<ModelCapability[]> {
-  const response = await fetch(`${API_BASE}/api/v1/models`);
+  const response = await apiFetch(`/api/v1/models`);
   if (!response.ok) return [];
   return response.json() as Promise<ModelCapability[]>;
 }
 
 export async function fetchBenchmarkDatasets(): Promise<DatasetSummary[]> {
-  const response = await fetch(`${API_BASE}/api/v1/benchmarks/datasets`);
+  const response = await apiFetch(`/api/v1/benchmarks/datasets`);
   if (!response.ok) return [];
   return response.json() as Promise<DatasetSummary[]>;
 }
@@ -85,7 +103,7 @@ export async function runBenchmarkEvaluation(input: {
   modelVariant: string;
   maxSamples?: number;
 }): Promise<BenchmarkRunResponse> {
-  const response = await fetch(`${API_BASE}/api/v1/benchmarks/evaluate`, {
+  const response = await apiFetch(`/api/v1/benchmarks/evaluate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -110,14 +128,14 @@ export async function fetchSpatialRuns(filters?: {
   if (filters?.verdictStatus) params.set("verdict_status", filters.verdictStatus);
   if (filters?.taskType) params.set("task_type", filters.taskType);
   if (filters?.limit) params.set("limit", String(filters.limit));
-  const url = `${API_BASE}/api/v1/spatial/runs${params.toString() ? `?${params}` : ""}`;
-  const response = await fetch(url);
+  const path = `/api/v1/spatial/runs${params.toString() ? `?${params}` : ""}`;
+  const response = await apiFetch(path);
   if (!response.ok) return [];
   return response.json() as Promise<AnalysisRunRecord[]>;
 }
 
 export async function fetchResultById(resultId: string): Promise<AnalysisResponse> {
-  const response = await fetch(`${API_BASE}/api/v1/results/${resultId}`);
+  const response = await apiFetch(`/api/v1/results/${resultId}`);
   if (!response.ok) {
     throw new Error(`Failed to load analysis result ${resultId} (HTTP ${response.status})`);
   }
@@ -125,13 +143,13 @@ export async function fetchResultById(resultId: string): Promise<AnalysisRespons
 }
 
 export async function fetchChats(): Promise<import("./types").ChatSummary[]> {
-  const response = await fetch(`${API_BASE}/api/v1/chats`);
+  const response = await apiFetch(`/api/v1/chats`);
   if (!response.ok) return [];
   return response.json();
 }
 
 export async function createChat(title?: string): Promise<import("./types").ChatSummary> {
-  const response = await fetch(`${API_BASE}/api/v1/chats`, {
+  const response = await apiFetch(`/api/v1/chats`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(title ? { title } : {}),
@@ -143,7 +161,7 @@ export async function createChat(title?: string): Promise<import("./types").Chat
 }
 
 export async function fetchChatDetail(chatId: string): Promise<import("./types").ChatDetail> {
-  const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}`);
+  const response = await apiFetch(`/api/v1/chats/${chatId}`);
   if (!response.ok) {
     throw new Error(`Failed to load chat ${chatId} (HTTP ${response.status})`);
   }
@@ -151,7 +169,7 @@ export async function fetchChatDetail(chatId: string): Promise<import("./types")
 }
 
 export async function renameChat(chatId: string, title: string): Promise<import("./types").ChatSummary> {
-  const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}`, {
+  const response = await apiFetch(`/api/v1/chats/${chatId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
@@ -163,7 +181,7 @@ export async function renameChat(chatId: string, title: string): Promise<import(
 }
 
 export async function deleteChat(chatId: string): Promise<{ status: string; deleted: boolean }> {
-  const response = await fetch(`${API_BASE}/api/v1/chats/${chatId}`, {
+  const response = await apiFetch(`/api/v1/chats/${chatId}`, {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -185,7 +203,7 @@ export async function sendChatMessage(input: {
   if (input.imageA) body.set("image_a", input.imageA);
   if (input.imageB) body.set("image_b", input.imageB);
 
-  const response = await fetch(`${API_BASE}/api/v1/chats/${input.chatId}/messages`, {
+  const response = await apiFetch(`/api/v1/chats/${input.chatId}/messages`, {
     method: "POST",
     body,
   });
@@ -197,16 +215,13 @@ export async function sendChatMessage(input: {
 }
 
 export async function fetchSpatialGeometries(resultId: string): Promise<import("./types").SpatialGeometryRecord[]> {
-  const response = await fetch(`${API_BASE}/api/v1/spatial/geometries?result_id=${encodeURIComponent(resultId)}`);
+  const response = await apiFetch(`/api/v1/spatial/geometries?result_id=${encodeURIComponent(resultId)}`);
   if (!response.ok) return [];
   return response.json();
 }
 
 export async function fetchModelStatus(): Promise<{ model_root: string; models: ModelCapability[] }> {
-  const response = await fetch(`${API_BASE}/api/v1/models/status`);
+  const response = await apiFetch(`/api/v1/models/status`);
   if (!response.ok) return { model_root: "", models: [] };
   return response.json();
 }
-
-
-

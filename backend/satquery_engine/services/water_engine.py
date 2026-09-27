@@ -740,7 +740,7 @@ def confirm_aerial_water(
     supported_sizes = np.bincount(components[supported].ravel(), minlength=count + 1)
     accepted = np.zeros(count + 1, dtype=bool)
     if count:
-        accepted[1:] = (sizes[1:] >= 9) & (supported_sizes[1:] / np.maximum(sizes[1:], 1) >= minimum_component_agreement)
+        accepted[1:] = (sizes[1:] >= 25) & (supported_sizes[1:] / np.maximum(sizes[1:], 1) >= minimum_component_agreement)
     confirmed = accepted[components] & candidate
     probability = np.where(confirmed, primary_probability, np.minimum(primary_probability, 0.10))
     candidate_pixels = int(candidate.sum())
@@ -909,12 +909,16 @@ def execute_water_pipeline(
                                 )
                         else:
                             prob = np.where(valid, scores[water_index], 0).astype("float32")
+                            # Deepness aerial model confuses building/tree shadows with water; suppress isolated shadow pixels
+                            if rgb is not None:
+                                pre_shadow = rgb_shadow_evidence(rgb[0], rgb[1], rgb[2], valid)
+                                prob = np.where(pre_shadow.mask & (prob < 0.78), np.minimum(prob, 0.12), prob)
                         core_seeds = None
                         details["vegetation_probability"] = scores[list(vegetation_indexes)].sum(0)
                         details["builtup_probability"] = scores[list(built_indexes)].sum(0)
                         route = "RGB_AERIAL_WATER"
                         specialist = {"model_id": candidate["model_id"], "threshold": .5,
-                            "min_area_pixels": 0, "checkpoint_sha256": candidate["checkpoint_sha256"],
+                            "min_area_pixels": 28, "checkpoint_sha256": candidate["checkpoint_sha256"],
                             "preprocessing": candidate["preprocessing"], "tile_count": len(candidate["tiles"]),
                             "device": candidate.get("device"), "corroborator_id": corroborator_id,
                             "corroborator_checkpoint_sha256": corroborator_checkpoint_sha256,
@@ -964,29 +968,32 @@ def execute_water_pipeline(
             builtup_probability=builtup_probability,
             water_threshold=threshold,
         )
-        # Keep high-confidence and connected candidate probability continuous;
-        # the independent shadow state is deliberately not subtracted.
-        adjudicated_prob = np.where(adjudication.water_mask | (prob >= 0.35), prob, np.minimum(prob, 0.20)).astype("float32")
+        # Suppress shadowed pixels unless validated as deep water by adjudication
+        adjudicated_prob = np.where(adjudication.water_mask, prob, np.minimum(prob, 0.15)).astype("float32")
 
-        # Postprocessing: river preservation and component analysis
+        # Postprocessing: river preservation, shadow suppression, and component analysis
         total_valid = int(valid.sum())
         min_comp_px = (
-            int(specialist["min_area_pixels"])
-            if specialist is not None
-            else max(25, round(total_valid * 0.000020))
+            max(28, round(total_valid * 0.000030))
+            if route == "RGB_AERIAL_WATER"
+            else (
+                int(specialist["min_area_pixels"])
+                if (specialist is not None and int(specialist.get("min_area_pixels", 0)) > 0)
+                else max(25, round(total_valid * 0.000020))
+            )
         )
-        apply_morph = route not in {"MULTISPECTRAL_NDWI_MNDWI", "RGB_AERIAL_WATER"}
+        apply_morph = route != "MULTISPECTRAL_NDWI_MNDWI"
         mask, components, disagreement = postprocess_water_mask(
             prob=adjudicated_prob,
             valid=valid,
             core_seeds=core_seeds,
             threshold=threshold,
-            min_component_px=min_comp_px if specialist is not None else (0 if route == "MULTISPECTRAL_NDWI_MNDWI" else min_comp_px),
+            min_component_px=min_comp_px if route != "MULTISPECTRAL_NDWI_MNDWI" else 0,
             pixel_res=pixel_res,
             transform=src.transform,
             crs=crs,
             apply_morphology=apply_morph,
-            filter_compact=route != "RGB_AERIAL_WATER",
+            filter_compact=True,
         )
         if specialist is not None and spectral_reference is not None:
             disagreement = np.maximum(

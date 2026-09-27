@@ -138,14 +138,16 @@ def read_index(
                     # Multi-type water detection (tightened thresholds):
                     # Type 1: Clear / blue water — requires stronger blue dominance
                     type1 = (ndbr > 0.05) & (b > r * 1.10) & (b >= g * 0.70) & (brightness < 0.40) & (brightness >= 0.03)
-                    # Type 2: Turbid inland lake / reservoir
+                    # Type 2: Turbid inland lake / reservoir — requires strong color
                     type2 = (g >= r * 1.10) & (b >= r * 1.15) & (ndbr >= 0.14) & (brightness < 0.30) & (brightness >= 0.03) & (local_texture_std < 0.020)
                     # Type 3: Sediment-laden braided river channels
                     type3 = (g >= r * 0.95) & (g <= r * 1.30) & (b >= g * 0.65) & (brightness < 0.25) & (brightness >= 0.03) & (local_texture_std < 0.025)
                     # Type 4: Deep dark water — blue must strictly exceed red
                     type4 = (brightness < 0.10) & (brightness >= 0.03) & (b > r * 1.08) & (local_texture_std < 0.020)
+                    # Type 5: Wet bright sand/silt false-positive suppression: if warm-colored AND very bright it's sand not water
+                    is_warm_bright_sand = (r >= g * 0.90) & (brightness > 0.35) & (ndbr < 0.04)
 
-                    water_cand = (type1 | type2 | type3 | type4) & ~is_vegetation & ~is_shadow & ~is_rough_terrain & ~is_urban & ~is_neutral & ~is_too_bright & ~is_too_dark & ~is_dark_soil
+                    water_cand = (type1 | type2 | type3 | type4) & ~is_vegetation & ~is_shadow & ~is_rough_terrain & ~is_urban & ~is_neutral & ~is_too_bright & ~is_too_dark & ~is_dark_soil & ~is_warm_bright_sand
 
                     # Continuous NDWI proxy in [-1.0, 1.0] — heavier texture/edge penalty
                     base_idx = np.clip(ndbr * 0.40 + ndgr * 0.15 + (0.25 - brightness) * 0.20 - local_texture_std * 1.80, -1.0, 1.0)
@@ -161,12 +163,21 @@ def read_index(
 
                 elif index_name == "ndvi":
                     # Visible Atmospherically Resistant Index (VARI): (Green - Red) / (Green + Red - Blue + eps)
+                    # This is more robust than simple NDVI for RGB imagery.
                     denom = g + r - b
-                    valid = np.abs(denom) > 1e-6
+                    valid_denom = np.abs(denom) > 1e-6
                     res = np.full_like(g, np.nan, dtype="float32")
-                    res[valid] = np.clip((g[valid] - r[valid]) / denom[valid], -1.0, 1.0)
-                    # Suppress low-green surfaces
-                    res[(g <= r * 1.02) | (g <= b * 0.98)] = -0.4
+                    res[valid_denom] = np.clip((g[valid_denom] - r[valid_denom]) / denom[valid_denom], -1.0, 1.0)
+                    # Suppress surfaces that are not meaningfully green:
+                    # (a) green not clearly above red (less than 5% excess)
+                    # (b) blue dominant over green (water/sky artifact)
+                    # (c) bright neutral surfaces: sand, rock, concrete
+                    brightness = (r + g + b) / 3.0
+                    color_spread = np.maximum(np.abs(r - g), np.maximum(np.abs(g - b), np.abs(r - b)))
+                    is_neutral_bright = (brightness > 0.45) & (color_spread < 0.08)  # bright sand/concrete
+                    is_bare_soil = (r >= g * 0.98) & (brightness > 0.08) & (brightness < 0.55)  # soil/rock
+                    is_blue_dominant = (b > g * 0.98) & (b > r * 1.05)  # water/sky
+                    res[(g <= r * 1.05) | (g <= b * 0.98) | is_neutral_bright | is_bare_soil | is_blue_dominant] = -0.4
                 else:  # ndbi
                     # Visible built-up / urban proxy: high neutral brightness vs vegetation
                     bright = (r + b) / 2.0

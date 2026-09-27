@@ -84,29 +84,29 @@ LC_STD  = [0.21047783363935432, 0.18425352096507464, 0.18222531962736283]
 # Canonical class → RGBA colour for visualization
 # Color definitions matching human visual distinctiveness:
 # 0: unknown     – grey (120, 120, 120)
-# 1: built-up    – warm red (220, 53, 69)
+# 1: built-up    – crimson red (220, 38, 38)
 # 2: vegetation  – bright grass green (34, 197, 94)
 # 3: cropland    – light olive (124, 179, 66)
-# 4: bare soil   – dark yellow land tone (194, 155, 56)
+# 4: bare soil   – rich amber tan land tone (217, 119, 6)
 # 5: water       – dark blue (20, 60, 140)
-# 6: road        – bright yellow (245, 200, 30)
+# 6: road        – sun yellow (250, 204, 21)
 CANONICAL_COLORS: dict[int, tuple[int, int, int, int]] = {
     0: (120, 120, 120, 130),   # unknown     – grey
-    1: (220,  53,  69, 160),   # built-up    – warm red
+    1: (220,  38,  38, 160),   # built-up / buildings – crimson red
     2: ( 34, 197,  94, 155),   # vegetation  – bright grass green
     3: (124, 179,  66, 150),   # cropland    – light olive
-    4: (194, 155,  56, 150),   # bare soil   – dark yellow
+    4: (217, 119,   6, 155),   # bare soil / land – rich amber tan
     5: ( 20,  60, 140, 165),   # water       – dark blue
-    6: (245, 200,  30, 160),   # road/impervious – bright yellow
+    6: (250, 204,  21, 160),   # road/impervious – sun yellow
 }
 CANONICAL_MASK_COLORS: dict[int, tuple[int, int, int]] = {
     0: (120, 120, 120),
-    1: (220,  53,  69),
+    1: (220,  38,  38),
     2: ( 34, 197,  94),
     3: (124, 179,  66),
-    4: (194, 155,  56),
+    4: (217, 119,   6),
     5: ( 20,  60, 140),
-    6: (245, 200,  30),
+    6: (250, 204,  21),
 }
 LC_CONFIDENCE_THRESHOLDS = {"minimum_confidence": 0.45, "ambiguity_margin": 0.10}
 
@@ -531,17 +531,16 @@ def _render_landcover_visuals(
                 Image.fromarray(f_rgba, mode="RGBA").save(fmp, format="PNG")
                 class_solid_masks["forest"] = fmp
 
-    # Backward compatibility aliases for legacy endpoints
-    # Land surfaces are visualized in dark yellow (194, 155, 56) to clearly contrast with green grass
-    land_mask = np.isin(canonical_classes, [1, 2, 3, 4, 6])
+    # Non-built land surfaces (bare soil, pervious ground, cropland, vegetation) clearly differentiated from buildings (built-up)
+    land_mask = np.isin(canonical_classes, [2, 3, 4, 6])
     land_grounding_path = output_dir / "land_dl_grounding.png"
-    _create_class_grounding(land_mask, (194, 155, 56), land_grounding_path)
+    _create_class_grounding(land_mask, (217, 119, 6), land_grounding_path)
     try:
         shutil.copy2(land_grounding_path, output_dir / "land_grounding_mask.png")
     except Exception:
         pass
     land_solid = np.zeros((h, w, 4), dtype="uint8")
-    land_solid[land_mask] = [194, 155, 56, 210]
+    land_solid[land_mask] = [217, 119, 6, 210]
     land_mask_path = output_dir / "land_dl_mask.png"
     Image.fromarray(land_solid, mode="RGBA").save(land_mask_path, format="PNG")
     try:
@@ -618,14 +617,39 @@ def predict_landcover_mask(
     canonical_classes[fine_conf < 0.10] = 0
 
     # Optical land & vegetation sanity filter:
-    # Never allow grass, agricultural fields, or dark soil/land to be classified as water.
     r_ch, g_ch, b_ch = rgb_01[0], rgb_01[1], rgb_01[2]
+    y_lum = 0.299 * r_ch + 0.587 * g_ch + 0.114 * b_ch
     exg = 2.0 * g_ch - r_ch - b_ch
+
+    # 1. Black border padding / nodata margins must remain unknown (class 0), never water
+    is_nodata = (r_ch < 0.02) & (g_ch < 0.02) & (b_ch < 0.02)
+    canonical_classes[is_nodata] = 0
+
+    # 2. Never allow grass, agricultural fields, or dark soil/land to be classified as water
+    water_pixels = (canonical_classes == 5)
     is_clear_veg = (exg > 0.03) | ((g_ch > b_ch * 1.25) & (g_ch > r_ch * 1.04))
     is_clear_soil = (r_ch > b_ch * 1.15) & (g_ch > b_ch * 0.95) & (r_ch > 0.10)
-    water_pixels = (canonical_classes == 5)
     canonical_classes[water_pixels & is_clear_veg] = 2   # Reassign to grass / vegetation (green)
     canonical_classes[water_pixels & is_clear_soil] = 4  # Reassign to bare soil / land (dark yellow)
+
+    # 3. Suppress false water on asphalt, parking lots, roads, and cast shadows
+    color_spread = np.maximum.reduce([np.abs(r_ch - g_ch), np.abs(g_ch - b_ch), np.abs(r_ch - b_ch)])
+    is_asphalt = (color_spread < 0.25) & (y_lum >= 0.12) & (y_lum <= 0.60) & (b_ch < 0.48)
+    water_pixels = (canonical_classes == 5)
+    canonical_classes[water_pixels & is_asphalt] = 6    # Reassign to road / impervious surface (yellow)
+
+    # 4. Filter remaining small / isolated water components in built environments
+    water_pixels = (canonical_classes == 5)
+    comps, n = ndi.label(water_pixels)
+    if n > 0:
+        sizes = np.bincount(comps.ravel())
+        for cid in range(1, n + 1):
+            sz = sizes[cid]
+            c_mask = (comps == cid)
+            c_b = float(b_ch[c_mask].mean())
+            is_true_pool = (fine_argmax[c_mask] == 12).mean() > 0.4 and c_b > 0.48
+            if sz < 200 and not is_true_pool:
+                canonical_classes[c_mask] = 6 if is_asphalt[c_mask].mean() > 0.2 else 4
 
     # 2. Canonical probabilities aggregation (sum normalized across 7 classes)
     canonical_probs = np.zeros((len(CANONICAL_CLASSES), h, w), dtype="float32")
@@ -981,19 +1005,22 @@ def _watershed_instances(
 
     # Identify seed markers via distance transform peaks
     dist = ndi.distance_transform_edt(interior_seed)
-    # Simple local maxima with h_prominence-based suppression
-    local_max = (dist == maximum_filter(dist, size=min_distance * 2 + 1)) & (dist >= h_prominence)
+    max_d = float(dist.max()) if dist.any() else 0.0
+    effective_prominence = max(2.5, min(h_prominence, max_d * 0.40)) if max_d > 0 else h_prominence
+    local_max = (dist == maximum_filter(dist, size=min_distance * 2 + 1)) & (dist >= effective_prominence)
     markers, num_markers = ndi_label(local_max)
 
     if num_markers == 0:
-        # Fall back: one label per connected component
+        # Fall back: distance transform peaks on footprint directly
+        dist_fp = ndi.distance_transform_edt(footprint_bin)
+        local_max = (dist_fp == maximum_filter(dist_fp, size=min_distance * 2 + 1)) & (dist_fp >= 2.5)
+        markers, num_markers = ndi_label(local_max)
+
+    if num_markers == 0:
         instance_labels, _ = ndi_label(footprint_bin)
     else:
-        from scipy.ndimage import watershed_ift
-        # Use inverted distance as energy
-        energy = (-dist * 10).astype("int16")
-        instance_labels = watershed_ift(energy.astype("uint8"), markers)
-        instance_labels[~footprint_bin] = 0
+        from skimage.segmentation import watershed
+        instance_labels = watershed(-dist, markers, mask=footprint_bin).astype("int32")
 
     # Filter by minimum area
     valid_ids: list[int] = []

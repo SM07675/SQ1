@@ -41,8 +41,8 @@ def plan_query(query: str, image_count: int = 1, pair_type: str = "auto", config
         count=True
         change=image_count==2 and configuration in {"PAIR_BITEMPORAL_OPTICAL","PAIR_BITEMPORAL_SAR"}
         fusion=configuration in {"PAIR_OPTICAL_SAR","PAIR_MULTISENSOR_BITEMPORAL"}
-    if land and not change and not fusion:
-        water = veg = True
+    query_has_water = water
+    query_has_veg = veg
     unsupported = has(q, r"capital of|president|who is|who was|write (?:a |some )?(?:code|script|poem)|python code|recipe|cook|translate|stock price|weather forecast|meaning of life")
     intents = []
     nodes = [PlanNode(node_id="validate", tool="validate")]
@@ -105,7 +105,7 @@ def plan_query(query: str, image_count: int = 1, pair_type: str = "auto", config
     task = TaskType.OPTICAL_SAR if fusion else TaskType.BUILDING_CHANGE if change and building else TaskType.BI_TEMPORAL_CHANGE if change else TaskType.BUILDING_COUNT if building else TaskType.LAND_COVER if land else TaskType.WATER_ANALYSIS if water else TaskType.VEGETATION_ANALYSIS if veg else TaskType.BUILT_UP_ANALYSIS if built else TaskType.LAND_COVER if land else TaskType.SCENE_DESCRIPTION if scene else TaskType.OBJECT_IDENTIFICATION
     return TaskPlan(task=task, application="optical_sar" if fusion else "bi_temporal" if change else "single_image",
                     specific_task=task.value, intents=intents, sub_tasks=intents, multi_intent=len(intents)>1,
-                    target="built-up" if building or built else "water" if water else "vegetation" if veg else None,
+                    target="built-up" if building or built else "water" if water else "vegetation" if veg else "land_cover" if land else None,
                     asks_direction=change, requires_pair=change or fusion, requires_temporal_relationship=change,
                     tools=list(dict.fromkeys(n.tool for n in nodes)), nodes=nodes,
                     reason="Composed requested objects, measurements and temporal/sensor relationships into a validated tool DAG.")

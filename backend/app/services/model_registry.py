@@ -59,6 +59,29 @@ class ModelRegistry:
     `confidence`, and optional `evidence` fields.
     """
 
+    @classmethod
+    def get_path(cls, model_name: str) -> Path | None:
+        """Resolve a local path for a model by name, ID, or alias."""
+        import os
+        root = Path(__file__).resolve().parents[2]
+        model_root = Path(os.environ.get("SATQUERY_MODEL_DIR", root / "models"))
+        try:
+            from satquery_engine.models.registry import LocalModelRegistry
+            reg = LocalModelRegistry(model_root)
+            manifest = reg.get(model_name)
+            if manifest and manifest.local_path.exists():
+                return manifest.local_path
+        except Exception:
+            pass
+
+        clean_target = model_name.lower().replace("-", "_")
+        if (model_root / model_name).exists():
+            return model_root / model_name
+        for sub in model_root.rglob("*"):
+            if clean_target in sub.name.lower().replace("-", "_"):
+                return sub
+        return None
+
     def __init__(self) -> None:
         self.specs = {
             "earthdial": ModelSpec(

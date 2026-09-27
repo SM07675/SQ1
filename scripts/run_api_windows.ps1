@@ -9,7 +9,7 @@ subst $Drive $ProjectRoot
 try {
     $ShortBackend = "$Drive\backend"
     Set-Location $ShortBackend
-    & (Join-Path $ShortBackend ".venv-integrated\Scripts\python.exe") -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+    & (Join-Path $ShortBackend ".venv-integrated\Scripts\python.exe") -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 } finally {
     subst $Drive /D
 }

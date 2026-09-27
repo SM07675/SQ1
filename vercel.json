@@ -5,6 +5,9 @@
   "installCommand": "npm --prefix frontend install",
   "outputDirectory": "frontend/dist",
   "rewrites": [
+    { "source": "/api/:path*", "destination": "http://151.185.58.96/api/:path*" },
+    { "source": "/health", "destination": "http://151.185.58.96/health" },
+    { "source": "/artifacts/:path*", "destination": "http://151.185.58.96/artifacts/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

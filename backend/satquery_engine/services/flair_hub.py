@@ -113,16 +113,26 @@ def load_flair_hub_from_root(root_path: str):
     return model, classes, mean, std, digest
 
 
-@lru_cache(maxsize=1)
-def predict_flair_hub(path: Path) -> dict:
+def predict_flair_hub(path: Path | str) -> dict:
     """Blend probabilities before assigning labels; retain all 19 raw channels."""
+    resolved = str(Path(path).resolve())
+    return _predict_flair_hub_cached(resolved)
+
+
+@lru_cache(maxsize=8)
+def _predict_flair_hub_cached(resolved_path: str) -> dict:
+    import os
     import torch
     from scipy.special import softmax
 
     model, classes, mean, std, digest = load_flair_hub()
     device = torch_device()
+    if device == "cpu":
+        threads = min(8, os.cpu_count() or 4)
+        if torch.get_num_threads() < threads:
+            torch.set_num_threads(threads)
     model.to(device)
-    with rasterio.open(path) as src:
+    with rasterio.open(resolved_path) as src:
         h, w = src.height, src.width
         if h * w > 4_000_000:
             raise ValueError("FLAIR-HUB RGB inference is limited to 4 million pixels on this host.")

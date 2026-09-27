@@ -47,13 +47,19 @@ def compatibility(path):
     return True, "Resolution-compatible aerial RGB; geography and appearance remain uncalibrated."
 
 
-@lru_cache(maxsize=2)
 def predict_landcover(path, *, benchmark_domain_override=False):
     """Return native-grid class probabilities, validity and model provenance.
 
     The explicit override is for labeled research chips stripped of georeferencing;
     it is never set from a query, request parameter, or production caller.
     """
+    resolved = str(Path(path).resolve())
+    return _predict_landcover_cached(resolved, benchmark_domain_override=benchmark_domain_override)
+
+
+@lru_cache(maxsize=8)
+def _predict_landcover_cached(resolved_path: str, *, benchmark_domain_override: bool = False):
+    path = Path(resolved_path)
     compatible, note = compatibility(path)
     if not compatible and not benchmark_domain_override:
         raise ValueError(note)

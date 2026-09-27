@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, ArrowUp, Paperclip, X, Image as ImageIcon, Sparkles, CheckCircle2 } from "lucide-react";
+import { Plus, ArrowUp, Paperclip, X, Image as ImageIcon, ImagePlus, CheckCircle2 } from "lucide-react";
 import { AttachmentTray, type AttachedFileItem } from "./AttachmentTray";
 
 interface ComposerProps {
@@ -53,8 +53,11 @@ export const Composer: React.FC<ComposerProps> = ({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    const nextHeight = Math.min(el.scrollHeight, 180);
-    el.style.height = `${Math.max(nextHeight, 28)}px`;
+    if (el.scrollHeight > 30) {
+      el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+    } else {
+      el.style.height = "22px";
+    }
   }, []);
 
   useEffect(() => {
@@ -62,46 +65,34 @@ export const Composer: React.FC<ComposerProps> = ({
   }, [query, adjustHeight]);
 
   const processFiles = (fileList: File[] | FileList) => {
-    const filesArray = Array.from(fileList).slice(0, 2);
-    setUploadStatus("Processing raster attachments...");
+    const incomingFiles = Array.from(fileList);
+    if (incomingFiles.length === 0) return;
 
-    const items: AttachedFileItem[] = [];
-    let count = 0;
-
-    filesArray.forEach((file, idx) => {
-      const isGeotiff = file.name.toLowerCase().endsWith(".tif") || file.name.toLowerCase().endsWith(".tiff");
-      const item: AttachedFileItem = {
-        file,
-        isGeotiff,
-        role: filesArray.length === 2 ? (idx === 0 ? "earlier" : "later") : "single",
-      };
-
-      // Create preview thumbnail if browser can render it
-      if (file.type.startsWith("image/") && !isGeotiff) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          item.previewUrl = e.target?.result as string;
-          count++;
-          if (count === filesArray.length) {
-            setAttachedFiles((prev) => [...prev, ...items].slice(0, 2));
-            setUploadStatus(null);
-          }
-        };
-        reader.readAsDataURL(file);
-      } else {
-        count++;
-        if (count === filesArray.length) {
-          setAttachedFiles((prev) => [...prev, ...items].slice(0, 2));
-          setUploadStatus(null);
+    setAttachedFiles((prev) => {
+      const combinedFiles = [...prev.map((p) => p.file), ...incomingFiles].slice(0, 2);
+      return combinedFiles.map((file, idx) => {
+        const isGeotiff =
+          file.name.toLowerCase().endsWith(".tif") || file.name.toLowerCase().endsWith(".tiff");
+        const existing = prev.find((p) => p.file.name === file.name && p.file.size === file.size);
+        let previewUrl = existing?.previewUrl;
+        if (!previewUrl && file.type.startsWith("image/") && !isGeotiff) {
+          previewUrl = URL.createObjectURL(file);
         }
-      }
-      items.push(item);
+        return {
+          file,
+          isGeotiff,
+          previewUrl,
+          role: combinedFiles.length === 2 ? (idx === 0 ? "earlier" : "later") : "single",
+        };
+      });
     });
   };
+
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       processFiles(e.target.files);
+      e.target.value = "";
     }
   };
 
@@ -185,8 +176,7 @@ export const Composer: React.FC<ComposerProps> = ({
     if (customPlaceholder) return customPlaceholder;
     if (attachedFiles.length === 2) return "Ask what changed between these satellite images…";
     if (attachedFiles.length === 1) return "Ask about this satellite imagery…";
-    if (activeContextImageName) return `Ask about ${activeContextImageName}…`;
-    return "Ask anything about your satellite imagery or upload files…";
+    return "Ask a follow-up about this imagery…";
   };
 
   const suggestionChips = [
@@ -260,8 +250,9 @@ export const Composer: React.FC<ComposerProps> = ({
             title="Attach GeoTIFF or image (PNG, JPEG)"
             aria-label="Attach satellite imagery"
           >
-            <Plus size={18} />
+            <ImagePlus size={19} strokeWidth={1.8} />
           </button>
+
 
           <textarea
             ref={textareaRef}
@@ -286,7 +277,7 @@ export const Composer: React.FC<ComposerProps> = ({
             title="Send query (Enter)"
             aria-label="Send query"
           >
-            <ArrowUp size={16} />
+            <ArrowUp size={18} strokeWidth={2.5} />
           </button>
         </div>
       </div>

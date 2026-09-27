@@ -19,6 +19,7 @@ import type {
 } from "./types";
 import { TopNav } from "./components/navigation/TopNav";
 import { HistoryDrawer } from "./components/navigation/HistoryDrawer";
+import { FloatingSidebar } from "./components/navigation/FloatingSidebar";
 import { CommandPalette } from "./components/navigation/CommandPalette";
 import { HomeZeroState } from "./components/views/HomeZeroState";
 import { CompareView } from "./components/views/CompareView";
@@ -33,13 +34,51 @@ import { AnalysisInspector } from "./components/inspectors/AnalysisInspector";
 import { EvidenceDrawer } from "./components/inspectors/EvidenceDrawer";
 import { MapPanel } from "./components/inspectors/MapPanel";
 import { Toast, type ToastMessage } from "./components/shared/Toast";
+import { LiquidAuroraBackground } from "./components/shared/LiquidAuroraBackground";
+import { LoginPage, DEMO_ACCOUNTS, type AuthUser } from "./components/views/LoginPage";
 
 const PINNED_STORAGE_KEY = "satquery_pinned_chats";
 const ARCHIVED_STORAGE_KEY = "satquery_archived_chats";
 const THEME_STORAGE_KEY = "satquery_theme";
 const DRAFT_QUERY_KEY = "satquery_draft_query";
+const AUTH_STORAGE_KEY = "satquery_auth_user";
 
 export default function App() {
+  // ── Auth State ──────────────────────────────────────────────────────────────
+  // Auto-login with default analyst Harshit S. so user is not blocked on every reload
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+      return DEMO_ACCOUNTS[0];
+    } catch {
+      return DEMO_ACCOUNTS[0];
+    }
+  });
+  const [appVisible, setAppVisible] = useState(true);
+
+  const handleLogin = (user: AuthUser) => {
+    setAuthUser(user);
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+    } catch {
+      // ignore
+    }
+    setTimeout(() => setAppVisible(true), 50);
+  };
+
+  const handleLogout = () => {
+    setAppVisible(false);
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    setTimeout(() => {
+      setAuthUser(null);
+    }, 320);
+  };
+
   // Navigation & View Routing
   const [activeTab, setActiveTab] = useState<NavTab>("analyze");
 
@@ -52,6 +91,7 @@ export default function App() {
 
   // History Drawer & Organization State
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isFullDrawerOpen, setIsFullDrawerOpen] = useState(false);
   const [pinnedChatIds, setPinnedChatIds] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(PINNED_STORAGE_KEY) || "[]");
@@ -67,10 +107,10 @@ export default function App() {
     }
   });
 
-  // Theme Management
+  // Theme Management — Default is White / Light
   const [theme, setTheme] = useState<ThemeMode>(() => {
     const saved = localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode | null;
-    return saved === "light" ? "light" : "dark";
+    return saved === "dark" ? "light" : "light"; // Default to white
   });
 
   // Historical Analysis Runs (for Explore & Reports)
@@ -93,6 +133,12 @@ export default function App() {
   const [draftQuery, setDraftQuery] = useState(() => localStorage.getItem(DRAFT_QUERY_KEY) || "");
 
   const initialLoadRef = useRef(false);
+  const currentChatIdRef = useRef<string | null>(null);
+  const suppressHashChangeRef = useRef(false);
+
+  useEffect(() => {
+    currentChatIdRef.current = currentChatId;
+  }, [currentChatId]);
 
   // Apply theme to document element
   useEffect(() => {
@@ -148,9 +194,15 @@ export default function App() {
   }, []);
 
   const selectChat = useCallback(async (chatId: string) => {
+    currentChatIdRef.current = chatId;
     setCurrentChatId(chatId);
     setActiveTab("analyze");
+    suppressHashChangeRef.current = true;
     window.location.hash = `#/chat/${chatId}`;
+    setTimeout(() => {
+      suppressHashChangeRef.current = false;
+    }, 200);
+
     try {
       const detail = await fetchChatDetail(chatId);
       setCurrentChatDetail(detail);
@@ -163,6 +215,7 @@ export default function App() {
 
   const handleNewChat = useCallback(() => {
     // Reset active chat to zero-state without deleting history
+    currentChatIdRef.current = null;
     setCurrentChatId(null);
     setCurrentChatDetail(null);
     setError(null);
@@ -182,7 +235,8 @@ export default function App() {
       if (chatMatch && chatMatch[1]) {
         await selectChat(chatMatch[1]);
       } else if (hash === "#/compare") {
-        setActiveTab("compare");
+        setActiveTab("analyze");
+        window.location.hash = "#/analyze";
       } else if (hash === "#/explore") {
         setActiveTab("explore");
       } else if (hash === "#/reports") {
@@ -200,12 +254,16 @@ export default function App() {
     handleHash();
 
     const onHashChange = () => {
+      if (suppressHashChangeRef.current) return;
       const hash = window.location.hash;
       const chatMatch = hash.match(/^#\/chat\/([a-zA-Z0-9_-]+)/);
       if (chatMatch && chatMatch[1]) {
-        selectChat(chatMatch[1]);
-      } else if (hash === "#/compare") setActiveTab("compare");
-      else if (hash === "#/explore") setActiveTab("explore");
+        if (chatMatch[1] !== currentChatIdRef.current) {
+          selectChat(chatMatch[1]);
+        }
+      } else if (hash === "#/compare") {
+        setActiveTab("analyze");
+      } else if (hash === "#/explore") setActiveTab("explore");
       else if (hash === "#/reports") setActiveTab("reports");
       else if (hash === "#/analyze" || !hash) {
         setActiveTab("analyze");
@@ -263,36 +321,57 @@ export default function App() {
 
   // Send message from Composer
   const handleSendMessage = async (query: string, pairType: string, files: File[]) => {
+    const effectiveQuery =
+      query.trim() ||
+      (files.length === 2
+        ? "Compare these two satellite images and find differences."
+        : "Analyze this satellite imagery.");
     let chatId = currentChatId;
-
-    // If starting a fresh chat from home zero-state, create it first
-    if (!chatId) {
-      try {
-        const created = await createChat("New Analysis");
-        chatId = created.chat_id;
-        setCurrentChatId(chatId);
-        window.location.hash = `#/chat/${chatId}`;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not initialize conversation");
-        return;
-      }
-    }
 
     setBusy(true);
     setError(null);
     setActiveTab("analyze");
 
-    // Optimistically append user message to UI
+    // If starting a fresh chat from home zero-state, create it first with user query title
+    if (!chatId) {
+      try {
+        const initialTitle = effectiveQuery.slice(0, 36);
+        const created = await createChat(initialTitle);
+        chatId = created.chat_id;
+        currentChatIdRef.current = chatId;
+        setCurrentChatId(chatId);
+        suppressHashChangeRef.current = true;
+        window.location.hash = `#/chat/${chatId}`;
+        setTimeout(() => {
+          suppressHashChangeRef.current = false;
+        }, 200);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not initialize conversation");
+        setBusy(false);
+        return;
+      }
+    }
+
+    // Optimistically append user message to UI with real blob URLs for immediate preview!
     const tempUserMsgId = `temp-${Date.now()}`;
+    const previewAttachments = files.map((f) => ({
+      name: f.name,
+      url: URL.createObjectURL(f),
+      type: "image",
+    }));
+
     setCurrentChatDetail((prev) => {
-      const baseDetail: ChatDetail = prev || {
-        chat_id: chatId!,
-        title: "New Analysis",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        messages: [],
-        images: [],
-      };
+      const baseDetail: ChatDetail =
+        prev && prev.chat_id === chatId
+          ? prev
+          : {
+              chat_id: chatId!,
+              title: effectiveQuery.slice(0, 36),
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              messages: [],
+              images: [],
+            };
       return {
         ...baseDetail,
         messages: [
@@ -301,9 +380,9 @@ export default function App() {
             message_id: tempUserMsgId,
             chat_id: chatId!,
             role: "user",
-            content: query,
+            content: effectiveQuery,
             created_at: new Date().toISOString(),
-            attachments: files.map((f) => ({ name: f.name, url: "", type: "image" })),
+            attachments: previewAttachments,
           },
         ],
       };
@@ -312,7 +391,7 @@ export default function App() {
     try {
       await sendChatMessage({
         chatId,
-        query,
+        query: effectiveQuery,
         pairType,
         imageA: files.length > 0 ? files[0] : undefined,
         imageB: files.length > 1 ? files[1] : undefined,
@@ -320,6 +399,15 @@ export default function App() {
 
       // Synchronize exact chat detail from backend
       const updatedDetail = await fetchChatDetail(chatId);
+      if (updatedDetail && (updatedDetail.title === "New Analysis" || !updatedDetail.title) && effectiveQuery) {
+        const smartTitle = effectiveQuery.slice(0, 36);
+        try {
+          await renameChat(chatId, smartTitle);
+          updatedDetail.title = smartTitle;
+        } catch {
+          // ignore
+        }
+      }
       setCurrentChatDetail(updatedDetail);
       await refreshChatsList();
       refreshRuns();
@@ -360,12 +448,23 @@ export default function App() {
   const messages = currentChatDetail?.messages || [];
   const isChatEmpty = messages.length === 0;
 
+  // ── Auth Gate ────────────────────────────────────────────────────────────────
+  if (!authUser) {
+    return <LoginPage theme={theme} onLogin={handleLogin} />;
+  }
+
   return (
-    <div className="satquery-app" data-theme={theme}>
+    <>
+    <LiquidAuroraBackground theme={theme} />
+    <div
+      className={`satquery-app ${isHistoryOpen ? "sidebar-open" : ""} ${appVisible ? "app-fade-in" : ""}`}
+      data-theme={theme}
+    >
       {/* 1. Floating Top Navigation (Apple / ChatGPT style) */}
       <TopNav
         activeTab={activeTab}
         onSelectTab={handleSelectTab}
+        onNewChat={handleNewChat}
         isHistoryOpen={isHistoryOpen}
         onToggleHistory={() => setIsHistoryOpen((prev) => !prev)}
         theme={theme}
@@ -374,10 +473,37 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
 
-      {/* 2. Slide-out History Drawer (Replaces permanent sidebar) */}
-      <HistoryDrawer
+      {/* 2. Floating Left Sidebar (transfers top navigation to left sidebar per design reference) */}
+      <FloatingSidebar
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
+        activeTab={activeTab}
+        onSelectTab={(tab) => {
+          handleSelectTab(tab);
+          setIsHistoryOpen(false);
+        }}
+        onNewChat={handleNewChat}
+        chats={chats}
+        currentChatId={currentChatId}
+        onSelectChat={(id) => {
+          selectChat(id);
+          setIsHistoryOpen(false);
+        }}
+        onOpenFullHistory={() => {
+          setIsHistoryOpen(false);
+          setIsFullDrawerOpen(true);
+        }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        authUser={authUser}
+        onLogout={handleLogout}
+      />
+
+      {/* 3. Deep Analysis History Drawer */}
+      <HistoryDrawer
+        isOpen={isFullDrawerOpen}
+        onClose={() => setIsFullDrawerOpen(false)}
         chats={chats}
         currentChatId={currentChatId}
         onSelectChat={selectChat}
@@ -392,7 +518,7 @@ export default function App() {
 
       {/* 3. Main Stage */}
       <main className="main-stage">
-        {/* TAB 1: ANALYZE / CHAT */}
+        {/* TAB 1: ANALYZE / CHAT (Includes single image & 2-image comparison directly in chat) */}
         {activeTab === "analyze" && (
           <>
             {isChatEmpty && !busy ? (
@@ -418,6 +544,7 @@ export default function App() {
                   onOpenInspector={(result) => setInspectorResult(result)}
                   onPreviewReport={(resultId) => setReportModalResultId(resultId)}
                   hasAttachedImages={Boolean(activeContextImageName)}
+                  onSendMessage={handleSendMessage}
                 />
 
                 {/* Floating Bottom Composer */}
@@ -429,11 +556,6 @@ export default function App() {
               </>
             )}
           </>
-        )}
-
-        {/* TAB 2: COMPARE */}
-        {activeTab === "compare" && (
-          <CompareView onSendMessage={handleSendMessage} busy={busy} />
         )}
 
         {/* TAB 3: EXPLORE */}
@@ -514,5 +636,6 @@ export default function App() {
       {/* 5. Toast Notifications */}
       <Toast toasts={toasts} onDismiss={handleDismissToast} />
     </div>
+    </>
   );
 }

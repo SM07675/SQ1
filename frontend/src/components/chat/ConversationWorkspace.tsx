@@ -16,6 +16,7 @@ interface ConversationWorkspaceProps {
   onOpenInspector: (result: AnalysisResponse) => void;
   onPreviewReport: (resultId: string) => void;
   hasAttachedImages: boolean;
+  onSendMessage?: (query: string, pairType: string, files: File[]) => Promise<void>;
 }
 
 export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({
@@ -29,17 +30,39 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({
   onOpenInspector,
   onPreviewReport,
   hasAttachedImages,
+  onSendMessage,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const userScrolledRef = useRef(false);
 
+  // Auto-scroll only if user hasn't manually scrolled up
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!userScrolledRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages, busy, error]);
 
+  const handleScroll = () => {
+    if (!containerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    userScrolledRef.current = scrollHeight - scrollTop - clientHeight > 100;
+  };
+
   return (
-    <div className="conversation-workspace">
+    <div className="conversation-workspace" ref={containerRef} onScroll={handleScroll}>
+      {/* Chat header matching screenshot 2 */}
+      <div className="chat-page-header">
+        <h2 className="chat-page-title">
+          Ask <span className="gradient-text">SatQuery</span>
+        </h2>
+        <p className="chat-page-subtitle">
+          Ask questions about satellite imagery and receive clear, actionable insights.
+        </p>
+      </div>
+
       <div className="conversation-message-stream">
-        {messages.map((msg) => {
+        {messages.map((msg, idx) => {
           if (msg.role === "user") {
             return (
               <UserMessage
@@ -52,16 +75,23 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({
           }
 
           if (msg.role === "assistant") {
+            const isLatest = idx === messages.length - 1;
             return (
               <AssistantMessage
                 key={msg.message_id}
                 content={msg.content}
                 result={msg.result}
+                isLatest={isLatest}
                 onOpenLightbox={onOpenLightbox}
                 onOpenMap={onOpenMap}
                 onOpenEvidenceDrawer={onOpenEvidenceDrawer}
                 onOpenInspector={onOpenInspector}
                 onPreviewReport={onPreviewReport}
+                onFollowUp={(queryText) => {
+                  if (onSendMessage) {
+                    onSendMessage(queryText, "auto", []);
+                  }
+                }}
               />
             );
           }
@@ -72,7 +102,7 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({
         {/* Real-time AI Progress State */}
         {busy && <AnalysisProgress busy={busy} hasAttachedImages={hasAttachedImages} />}
 
-        {/* Friendly Error State */}
+        {/* Error State */}
         {error && (
           <div className="chat-error-banner">
             <div className="error-icon-box">

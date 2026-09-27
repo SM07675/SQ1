@@ -4,11 +4,15 @@ Overlapping probabilities are merged before global instance extraction. The GIS
 feature set is the sole source of counts, masks, statistics and visual evidence.
 Counts are estimates; image sharpness is not proof of detection accuracy.
 """
+from __future__ import annotations
+
 import hashlib
 import json
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
+
 import numpy as np
 import rasterio
 from rasterio.windows import Window
@@ -161,14 +165,14 @@ def separate_instances(probability, distance, valid, threshold=THRESHOLD):
     large_ids[0] = False
     large = large_ids[components]
 
-    # Collapse flat maxima before applying the existing separation distance.
-    peaks = _plateau_peaks(distance, foreground & ~large, min_distance=4)
+    # Collapse flat maxima before applying the separation distance (min_distance=6 prevents splitting roofs).
+    peaks = _plateau_peaks(distance, (distance >= 2.0) & foreground & ~large, min_distance=6)
     if len(peaks):
         seeds[tuple(peaks.T)] = True
 
     # Large blobs retain the wider separation distance and marker cap.
     if large.any():
-        large_peaks = _plateau_peaks(distance, large, min_distance=8)
+        large_peaks = _plateau_peaks(distance, (distance >= 3.0) & large, min_distance=10)
         if len(large_peaks):
             # Cap markers per large component to prevent runaway over-segmentation
             for comp_id in np.where(large_ids)[0]:

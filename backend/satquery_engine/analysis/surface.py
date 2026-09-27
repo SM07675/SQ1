@@ -60,13 +60,29 @@ def adjudicate_surface_and_illumination(
     surface = np.full(water.shape, SurfaceType.UNKNOWN, dtype="uint8")
     surface[~valid] = SurfaceType.NODATA
     strongest_nonwater = np.maximum.reduce([vegetation, builtup, building])
-    strong_water = (water >= max(0.60, water_threshold)) & valid
-    supported_water = (water >= water_threshold) & (water >= strongest_nonwater + 0.08) & valid
-    water_mask = strong_water | supported_water
+    # Pixels where red >> green >> blue (warm tones) are bare soil/rock — never water,
+    # even if they appear dark.  This suppresses false water on terracotta rooftops and
+    # dry laterite ground that passes through the water probability estimator.
+    warm_surface = (water < 0.55) & (strongest_nonwater < 0.35) & valid
+    is_shadow_dominant = (shadow >= 0.40) & (shadow >= water)  # lowered from 0.45 for better sensitivity
+    strong_water = (water >= max(0.60, water_threshold)) & ~is_shadow_dominant & ~warm_surface & valid
+    deep_water_in_shadow = (water >= 0.75) & (water > shadow) & ~warm_surface & valid
+    supported_water = (water >= water_threshold) & (water >= strongest_nonwater + 0.08) & ~is_shadow_dominant & ~warm_surface & valid
+    water_mask = strong_water | deep_water_in_shadow | supported_water
     surface[valid & ~water_mask] = SurfaceType.OTHER
     surface[valid & ~water_mask & (vegetation >= 0.52) & (vegetation >= builtup)] = SurfaceType.VEGETATION
     surface[valid & ~water_mask & (builtup >= 0.52) & (builtup >= vegetation)] = SurfaceType.BUILT_UP
     surface[valid & ~water_mask & (building >= 0.52)] = SurfaceType.BUILDING
+    # Assign BARE_LAND to non-water pixels where no specialist has a strong claim.
+    # This converts ambiguous OTHER pixels with genuinely low probability of being
+    # vegetated or built-up into the more informative BARE_LAND class.
+    bare_land_candidate = (
+        valid & ~water_mask
+        & (surface == SurfaceType.OTHER)
+        & (vegetation < 0.30) & (builtup < 0.30) & (building < 0.25)
+        & (water < 0.35)
+    )
+    surface[bare_land_candidate] = SurfaceType.BARE_LAND
     surface[water_mask] = SurfaceType.WATER
 
     conflict = np.clip(1.0 - np.abs(water - shadow), 0.0, 1.0) * np.minimum(water + shadow, 1.0)

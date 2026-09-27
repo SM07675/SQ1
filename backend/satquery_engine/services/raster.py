@@ -256,10 +256,24 @@ def deterministic_change_detection(before: Path, after: Path, output_dir: Path) 
     if a.shape != b.shape:
         raise ValueError("Rasters must be aligned to the same sampled grid")
 
-    delta = np.abs(a - b)
-    valid=np.isfinite(a)&np.isfinite(b)
+    valid = np.isfinite(a) & np.isfinite(b)
     if not valid.any():
         raise ValueError("No shared valid pixels are available for change measurement")
+
+    std_a = float(np.std(a[valid]))
+    std_b = float(np.std(b[valid]))
+    if std_a > 0.02 and std_b > 0.02:
+        ratio = std_a / std_b
+        if 0.25 < ratio < 4.0:
+            mean_a = float(np.mean(a[valid]))
+            mean_b = float(np.mean(b[valid]))
+            b_norm = np.clip((b - mean_b) * ratio + mean_a, 0.0, 1.0)
+        else:
+            b_norm = b
+    else:
+        b_norm = b
+
+    delta = np.abs(a - b_norm)
     median = float(np.median(delta[valid]))
     mad = float(np.median(np.abs(delta[valid] - median)))
     threshold = max(0.08, median + 3.0 * max(mad, 0.01))

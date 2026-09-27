@@ -213,12 +213,27 @@ def run_baseline_change_detector(
     norm_a = np.clip(arr_a / (255.0 if arr_a.max() > 1.0 else 1.0), 0.0, 1.0)
     norm_b = np.clip(arr_b / (255.0 if arr_b.max() > 1.0 else 1.0), 0.0, 1.0)
 
-    # 1. Color / Radiometric absolute difference
-    color_diff = np.mean(np.abs(norm_a - norm_b), axis=0) if norm_a.ndim == 3 else np.abs(norm_a - norm_b)
+    # Relative Radiometric Normalization (RRN) to remove illumination and sun-angle drift
+    norm_b_aligned = norm_b.copy()
+    if norm_a.shape == norm_b.shape:
+        ch_count = norm_b.shape[0] if norm_b.ndim == 3 else 1
+        for ch in range(ch_count):
+            sl = (ch,) if norm_b.ndim == 3 else ()
+            a_v, b_v = norm_a[sl], norm_b[sl]
+            std_a = float(np.std(a_v))
+            std_b = float(np.std(b_v))
+            if std_a > 0.02 and std_b > 0.02:
+                ratio = std_a / std_b
+                if 0.25 < ratio < 4.0:
+                    mean_a, mean_b = float(np.mean(a_v)), float(np.mean(b_v))
+                    norm_b_aligned[sl] = np.clip((b_v - mean_b) * ratio + mean_a, 0.0, 1.0)
+
+    # 1. Color / Radiometric absolute difference on normalized pair
+    color_diff = np.mean(np.abs(norm_a - norm_b_aligned), axis=0) if norm_a.ndim == 3 else np.abs(norm_a - norm_b_aligned)
 
     # 2. Structural Similarity (SSIM) discrepancy
     gray_a = norm_a[0] if norm_a.ndim == 3 else norm_a
-    gray_b = norm_b[0] if norm_b.ndim == 3 else norm_b
+    gray_b = norm_b_aligned[0] if norm_b.ndim == 3 else norm_b_aligned
     ssim_disc = compute_ssim_discrepancy(gray_a, gray_b)
 
     # 3. Combined change probability map
@@ -278,8 +293,8 @@ def compute_learned_change_probability(
     if not finite.size or np.max(finite) == 0:
         return np.zeros_like(mean_diff, dtype="float32")
 
-    p90 = np.percentile(finite, 90)
-    prob_map = 1.0 / (1.0 + np.exp(-10.0 * (structural - max(p90, 0.08))))
+    # Calibrated probability: sigmoid centered at 0.22 prevents false positive change on stable pairs
+    prob_map = 1.0 / (1.0 + np.exp(-12.0 * (structural - 0.22)))
     return prob_map.astype("float32")
 
 
@@ -344,6 +359,28 @@ async def run_change_detection_witness(
         change_mask, scaled_transform, crs, kind="tinycd_structural_change", output_path=geojson_path
     )
 
+    # Semantic change classification
+    structural_type = "surface_modification"
+    if changed_pixels > 0:
+        gray_b = arr_b[0] if arr_b.ndim == 3 else arr_b
+        gray_a = arr_a[0] if arr_a.ndim == 3 else arr_a
+        delta_gray = gray_b - gray_a
+        mean_chg_delta = float(delta_gray[change_mask].mean())
+        if arr_a.shape[0] >= 3 and arr_b.shape[0] >= 3:
+            exg_a = 2.0 * arr_a[1] - arr_a[0] - arr_a[2]
+            exg_b = 2.0 * arr_b[1] - arr_b[0] - arr_b[2]
+            exg_diff = float((exg_b - exg_a)[change_mask].mean())
+            if exg_diff < -0.05:
+                structural_type = "vegetation_loss"
+            elif exg_diff > 0.05:
+                structural_type = "vegetation_growth"
+            elif mean_chg_delta > 0.08:
+                structural_type = "built_up_expansion"
+            elif mean_chg_delta < -0.10:
+                structural_type = "water_expansion"
+        elif mean_chg_delta > 0.08:
+            structural_type = "built_up_expansion"
+
     base_conf = float(external_res.get("confidence", 0.85)) if external_res.get("available") else 0.84
     if consensus_iou is not None:
         confidence = round(0.5 * base_conf + 0.5 * min(1.0, consensus_iou / 70.0), 3)
@@ -366,5 +403,5 @@ async def run_change_detection_witness(
         heatmap_path=heatmap_path,
         geojson_path=geojson_path,
         consensus_agreement_percent=round(consensus_iou, 2) if consensus_iou is not None else None,
-        structural_change_type="surface_modification",
+        structural_change_type=structural_type,
     )

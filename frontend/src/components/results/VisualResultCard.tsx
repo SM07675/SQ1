@@ -1,14 +1,13 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   Maximize2,
   Map,
   Download,
   SlidersHorizontal,
   ChevronDown,
-  Layers,
-  Sparkles,
+  ChevronsLeftRight,
 } from "lucide-react";
-import type { AnalysisResponse, ArtifactRef } from "../../types";
+import type { AnalysisResponse } from "../../types";
 import { artifactUrl, downloadPdfReport } from "../../api";
 
 interface VisualResultCardProps {
@@ -22,14 +21,14 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
   onOpenLightbox,
   onOpenMap,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
+
   const [activeLayer, setActiveLayer] = useState<string>("result");
-  const [compareMode, setCompareMode] = useState<"slider" | "off">("off");
+  const [compareMode, setCompareMode] = useState<"slider" | "off">("slider");
   const [sliderPos, setSliderPos] = useState<number>(50);
   const [isDraggingSlider, setIsDraggingSlider] = useState<boolean>(false);
   const [showDownloadMenu, setShowDownloadMenu] = useState<boolean>(false);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const downloadMenuRef = useRef<HTMLDivElement>(null);
 
   // Close download menu on click outside
   useEffect(() => {
@@ -44,73 +43,165 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showDownloadMenu]);
 
-  // Identify original preview artifact
-  const originalArtifact = result.artifacts.find(
-    (a) =>
-      a.name.includes("preview_1") ||
-      a.name.includes("original") ||
-      a.name.includes("input_a")
-  );
-
-  // Identify secondary image if bi-temporal or optical-sar
-  const secondaryArtifact = result.artifacts.find(
-    (a) => a.name.includes("preview_2") || a.name.includes("input_b")
+  // List all available displayable image layers (excluding raw GeoTIFFs)
+  const imageArtifacts = useMemo(
+    () =>
+      result.artifacts.filter(
+        (a) =>
+          a.mime_type.startsWith("image/") &&
+          !a.name.endsWith(".tif") &&
+          !a.name.endsWith(".tiff")
+      ),
+    [result.artifacts]
   );
 
   const queryLower = (result.query || "").toLowerCase();
   const taskName = (result.task_plan?.task || "").toLowerCase();
   const useQueryForLayer = !taskName || taskName === "grounding";
-  const isLandResult = taskName === "land_cover" || (useQueryForLayer && /\b(land|soil|cover|grass)\b/.test(queryLower));
-  const isBuildingResult = ["building_count", "building_detection", "buildings"].includes(taskName) || (useQueryForLayer && /\b(buildings?|footprints?)\b/.test(queryLower));
-  const isWaterResult = ["water_analysis", "water_detection"].includes(taskName) || (useQueryForLayer && /\b(water|lake|river|flood)\b/.test(queryLower));
-  const preferredOverlayNames = isLandResult
-    ? ["land_cover_overlay.png", "land_only_overlay.png"]
-    : isBuildingResult
-      ? ["buildings_overlay.png", "building_overlay.png"]
-      : isWaterResult
-        ? ["water_overlay.png"]
-        : [];
-  const overlayArtifact = preferredOverlayNames
-    .map((name) => result.artifacts.find((a) => a.name === name))
-    .find(Boolean) || result.artifacts.find(
-      (a) => a.name.includes("overlay") || a.name.includes("change_mask") || a.name.includes("detection_mask")
+
+  const isLandResult =
+    taskName === "land_cover" ||
+    (useQueryForLayer && /\b(land|soil|cover|grass|vegetation|terrain)\b/.test(queryLower));
+
+  const isBuildingResult =
+    ["building_count", "building_detection", "buildings"].includes(taskName) ||
+    (useQueryForLayer && /\b(buildings?|footprints?|houses?|structures?)\b/.test(queryLower));
+
+  const isWaterResult =
+    ["water_analysis", "water_detection"].includes(taskName) ||
+    (useQueryForLayer && /\b(water|lake|river|flood|ocean|sea|pond|reservoir)\b/.test(queryLower));
+
+  const isBiTemporal =
+    taskName === "bi_temporal_change" ||
+    queryLower.includes("change") ||
+    queryLower.includes("between") ||
+    queryLower.includes("compare") ||
+    (result.task_plan?.years && result.task_plan.years.length >= 2);
+
+  // 1. Previous / Baseline / Before / Original Image (ALWAYS Left side of slider)
+  const originalArtifact = useMemo(() => {
+    return (
+      imageArtifacts.find(
+        (a) =>
+          a.name.includes("preview_1") ||
+          a.name.includes("prepared_1") ||
+          a.name.includes("before") ||
+          a.name.includes("original") ||
+          a.name.includes("input_a") ||
+          a.role === "earlier"
+      ) || imageArtifacts[0]
     );
+  }, [imageArtifacts]);
 
-  // List all available image layers that actually exist
-  const imageArtifacts = result.artifacts.filter(
-    (a) =>
-      a.mime_type.startsWith("image/") &&
-      !a.name.endsWith(".tif") &&
-      !a.name.endsWith(".tiff")
-  );
+  // 2. Later / After / Secondary Image (for bi-temporal comparison)
+  const secondaryArtifact = useMemo(() => {
+    return (
+      imageArtifacts.find(
+        (a) =>
+          a.name.includes("preview_2") ||
+          a.name.includes("prepared_2") ||
+          a.name.includes("after") ||
+          a.name.includes("input_b") ||
+          a.role === "later"
+      ) ||
+      (imageArtifacts.length > 1 &&
+      imageArtifacts[1] !== originalArtifact &&
+      !imageArtifacts[1].name.includes("overlay") &&
+      !imageArtifacts[1].name.includes("mask")
+        ? imageArtifacts[1]
+        : undefined)
+    );
+  }, [imageArtifacts, originalArtifact]);
 
-  // Determine current image URL to render based on active layer
-  let currentImageUrl = overlayArtifact?.url || originalArtifact?.url || imageArtifacts[0]?.url;
+  // 3. AI Analysis Result Overlay Artifact
+  const overlayArtifact = useMemo(() => {
+    const prefersLandOnly =
+      isLandResult &&
+      !/\b(water|lake|river|flood|ocean|sea|pond|waterbody)\b/.test(queryLower);
 
+    const preferredOverlayNames = prefersLandOnly
+      ? ["land_only_overlay.png", "land_cover_overlay.png"]
+      : isLandResult
+        ? ["land_cover_overlay.png", "land_only_overlay.png"]
+        : isBuildingResult
+          ? ["buildings_overlay.png", "building_change_overlay.png", "building_overlay.png"]
+          : isWaterResult
+            ? ["water_overlay.png"]
+            : [];
+
+    return (
+      preferredOverlayNames
+        .map((name) => imageArtifacts.find((a) => a.name === name))
+        .find(Boolean) ||
+      imageArtifacts.find(
+        (a) =>
+          a.name.includes("overlay") ||
+          a.name.includes("change_mask") ||
+          a.name.includes("tinycd") ||
+          a.name.includes("difference_map") ||
+          a.name.includes("detection_mask")
+      )
+    );
+  }, [imageArtifacts, isLandResult, isBuildingResult, isWaterResult, queryLower]);
+
+  // Comparison target in bi-temporal mode: "after" (Image 2) or "overlay" (Change Mask)
+  const [compareTarget, setCompareTarget] = useState<"after" | "overlay">("after");
+
+  const canCompare = !!originalArtifact && (!!secondaryArtifact || !!overlayArtifact);
+
+  // Determine images for the slider
+  // Left image: ALWAYS the Previous / Original Image
+  const leftImageUrl = artifactUrl(originalArtifact?.url) || "";
+
+  // Right image: Either After image or AI Overlay
+  const rightArtifact =
+    isBiTemporal && secondaryArtifact && compareTarget === "after"
+      ? secondaryArtifact
+      : overlayArtifact || secondaryArtifact || originalArtifact;
+  const rightImageUrl = artifactUrl(rightArtifact?.url) || leftImageUrl;
+
+  // Single layer image URL (when compareMode === "off")
+  let currentSingleImageUrl = overlayArtifact?.url || originalArtifact?.url || imageArtifacts[0]?.url;
   if (activeLayer === "original" && originalArtifact) {
-    currentImageUrl = originalArtifact.url;
+    currentSingleImageUrl = originalArtifact.url;
   } else if (activeLayer === "secondary" && secondaryArtifact) {
-    currentImageUrl = secondaryArtifact.url;
+    currentSingleImageUrl = secondaryArtifact.url;
   } else if (activeLayer === "result" && overlayArtifact) {
-    currentImageUrl = overlayArtifact.url;
+    currentSingleImageUrl = overlayArtifact.url;
   } else {
     const customMatch = imageArtifacts.find((a) => a.name === activeLayer);
-    if (customMatch) currentImageUrl = customMatch.url;
+    if (customMatch) currentSingleImageUrl = customMatch.url;
+  }
+  const resolvedSingleImageUrl = artifactUrl(currentSingleImageUrl) || leftImageUrl;
+
+  // Accurate labels for bi-temporal or baseline/overlay comparison
+  const years = result.task_plan?.years || [];
+  let leftLabel = "Previous";
+  let rightLabel = "Current";
+
+  if (isBiTemporal && (secondaryArtifact || years.length >= 2)) {
+    if (years.length >= 2) {
+      leftLabel = `Mar ${years[0]}`;
+      rightLabel = compareTarget === "overlay" && overlayArtifact ? "Change Overlay" : `Mar ${years[1]}`;
+    } else {
+      leftLabel = "Previous (Before)";
+      rightLabel = compareTarget === "overlay" && overlayArtifact ? "Change Overlay" : "Current (After)";
+    }
+  } else {
+    leftLabel = "Original Imagery";
+    rightLabel = overlayArtifact?.name?.includes("land")
+      ? "Land Cover Overlay"
+      : overlayArtifact?.name?.includes("building")
+        ? "Building Footprints"
+        : overlayArtifact?.name?.includes("water")
+          ? "Water Overlay"
+          : "AI Analysis Overlay";
   }
 
-  const resolvedImageUrl = artifactUrl(currentImageUrl) || "";
-  const resolvedOriginalUrl = artifactUrl(originalArtifact?.url) || resolvedImageUrl;
-
   // Detect analysis category for contextual color legend
-  const hasLandCover = isLandResult && !!result.artifacts.find((a) => a.name === "land_cover_overlay.png");
-
-  const hasWater =
-    !hasLandCover &&
-    isWaterResult;
-
-  const hasBuildings =
-    isBuildingResult;
-
+  const hasLandCover = isLandResult && !!result.artifacts.find((a) => a.name.includes("land_cover") || a.name.includes("land_only"));
+  const hasWater = !hasLandCover && isWaterResult;
+  const hasBuildings = isBuildingResult;
   const hasChange =
     queryLower.includes("change") ||
     taskName === "bi_temporal_change" ||
@@ -121,17 +212,27 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
     | undefined)?.breakdown;
   const showLandClass = (name: string) => !landBreakdown || (landBreakdown[name]?.pixels ?? 0) > 0;
 
-  // Handle draggable swipe slider for Before / After comparison
-  const handleSliderMove = (clientX: number) => {
+  // Slider drag physics
+  const handleSliderMove = useCallback((clientX: number) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return;
     const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-    const percent = (x / rect.width) * 100;
+    const percent = Math.round((x / rect.width) * 1000) / 10;
     setSliderPos(percent);
+  }, []);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDraggingSlider(true);
+    handleSliderMove(e.clientX);
   };
 
-  const handleMouseDown = () => setIsDraggingSlider(true);
-  const handleMouseUp = () => setIsDraggingSlider(false);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length > 0) {
+      setIsDraggingSlider(true);
+      handleSliderMove(e.touches[0].clientX);
+    }
+  };
 
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
@@ -148,7 +249,7 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
 
     if (isDraggingSlider) {
       window.addEventListener("mousemove", handleGlobalMouseMove);
-      window.addEventListener("touchmove", handleGlobalTouchMove);
+      window.addEventListener("touchmove", handleGlobalTouchMove, { passive: true });
       window.addEventListener("mouseup", handleGlobalMouseUp);
       window.addEventListener("touchend", handleGlobalMouseUp);
     }
@@ -158,7 +259,7 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
       window.removeEventListener("mouseup", handleGlobalMouseUp);
       window.removeEventListener("touchend", handleGlobalMouseUp);
     };
-  }, [isDraggingSlider]);
+  }, [isDraggingSlider, handleSliderMove]);
 
   const geojsonArtifact = result.artifacts.find((a) => a.mime_type.includes("json") && a.name.endsWith(".geojson"));
   const reportArtifact = result.artifacts.find((a) => a.name.endsWith(".pdf"));
@@ -168,6 +269,55 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
       {/* Top Toolbar */}
       <div className="visual-card-toolbar">
         <div className="layer-switcher-group">
+          {/* Comparison Mode Toggles */}
+          {canCompare && isBiTemporal && secondaryArtifact && (
+            <>
+              <button
+                type="button"
+                className={`layer-switch-btn compare ${compareMode === "slider" && compareTarget === "after" ? "active" : ""}`}
+                onClick={() => {
+                  setCompareMode("slider");
+                  setCompareTarget("after");
+                }}
+                title="Swipe compare: Previous Image vs Later Image"
+              >
+                <SlidersHorizontal size={13} />
+                <span>Compare (Before / After)</span>
+              </button>
+
+              {overlayArtifact && (
+                <button
+                  type="button"
+                  className={`layer-switch-btn compare ${compareMode === "slider" && compareTarget === "overlay" ? "active" : ""}`}
+                  onClick={() => {
+                    setCompareMode("slider");
+                    setCompareTarget("overlay");
+                  }}
+                  title="Swipe compare: Previous Image vs Change Overlay"
+                >
+                  <SlidersHorizontal size={13} />
+                  <span>Compare (Before / Overlay)</span>
+                </button>
+              )}
+            </>
+          )}
+
+          {canCompare && (!isBiTemporal || !secondaryArtifact) && (
+            <button
+              type="button"
+              className={`layer-switch-btn compare ${compareMode === "slider" ? "active" : ""}`}
+              onClick={() => {
+                setCompareMode((prev) => (prev === "slider" ? "off" : "slider"));
+                if (compareMode === "off") setActiveLayer("result");
+              }}
+              title="Swipe compare: Original vs AI Analysis"
+            >
+              <SlidersHorizontal size={13} />
+              <span>Compare (Slider)</span>
+            </button>
+          )}
+
+          {/* Single Layer Views */}
           {originalArtifact && (
             <button
               type="button"
@@ -179,7 +329,22 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
                 setCompareMode("off");
               }}
             >
-              Original
+              {isBiTemporal && secondaryArtifact ? "Before Image" : "Original"}
+            </button>
+          )}
+
+          {secondaryArtifact && (
+            <button
+              type="button"
+              className={`layer-switch-btn ${
+                activeLayer === "secondary" && compareMode === "off" ? "active" : ""
+              }`}
+              onClick={() => {
+                setActiveLayer("secondary");
+                setCompareMode("off");
+              }}
+            >
+              After Image
             </button>
           )}
 
@@ -198,33 +363,22 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
             </button>
           )}
 
-          {/* Swipe Comparison Mode if both original & overlay or pair exists */}
-          {originalArtifact && (overlayArtifact || secondaryArtifact) && (
-            <button
-              type="button"
-              className={`layer-switch-btn compare ${compareMode === "slider" ? "active" : ""}`}
-              onClick={() => {
-                setCompareMode((prev) => (prev === "slider" ? "off" : "slider"));
-                if (compareMode === "off") setActiveLayer("result");
-              }}
-            >
-              <SlidersHorizontal size={13} />
-              <span>Compare</span>
-            </button>
-          )}
-
           {/* Dynamic Extra Layers Dropdown if multiple exist */}
           {imageArtifacts.length > 2 && (
             <div className="extra-layers-select-wrap">
               <select
                 className="extra-layers-select"
-                value={activeLayer}
+                value={compareMode === "off" ? activeLayer : "compare"}
                 onChange={(e) => {
-                  setActiveLayer(e.target.value);
-                  setCompareMode("off");
+                  if (e.target.value === "compare") {
+                    setCompareMode("slider");
+                  } else {
+                    setActiveLayer(e.target.value);
+                    setCompareMode("off");
+                  }
                 }}
               >
-                <option value="result">Layers...</option>
+                <option value="compare">Layer options...</option>
                 {imageArtifacts.map((art) => (
                   <option key={art.name} value={art.name}>
                     {art.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "")}
@@ -240,7 +394,7 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
           <button
             type="button"
             className="action-icon-btn"
-            onClick={() => onOpenLightbox(resolvedImageUrl, result.query || "Satellite Imagery")}
+            onClick={() => onOpenLightbox(compareMode === "slider" ? rightImageUrl : resolvedSingleImageUrl, result.query || "Satellite Imagery")}
             title="Expand to Fullscreen Lightbox"
             aria-label="Expand image"
           >
@@ -275,7 +429,7 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
             {showDownloadMenu && (
               <div className="download-popover-menu">
                 <a
-                  href={resolvedImageUrl}
+                  href={resolvedSingleImageUrl}
                   download={`SatQuery_Result_${result.result_id.slice(0, 8)}.png`}
                   className="download-menu-item"
                   onClick={() => setShowDownloadMenu(false)}
@@ -318,56 +472,67 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
         ref={containerRef}
         onClick={() => {
           if (compareMode === "off") {
-            onOpenLightbox(resolvedImageUrl, result.query || "Satellite Analysis");
+            onOpenLightbox(resolvedSingleImageUrl, result.query || "Satellite Analysis");
           }
         }}
       >
-        {compareMode === "slider" ? (
-          <div className="swipe-compare-viewport" onMouseDown={handleMouseDown}>
-            {/* Base Image (Underneath) */}
+        {compareMode === "slider" && canCompare ? (
+          <div
+            className="swipe-compare-viewport"
+            onMouseDown={handleMouseDown}
+            onTouchStart={handleTouchStart}
+            role="slider"
+            aria-label="Comparison slider"
+            aria-valuenow={Math.round(sliderPos)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowLeft") setSliderPos((p) => Math.max(0, p - 2));
+              else if (e.key === "ArrowRight") setSliderPos((p) => Math.min(100, p + 2));
+              else if (e.key === "Home") setSliderPos(0);
+              else if (e.key === "End") setSliderPos(100);
+            }}
+          >
+            {/* Layer 1: Left / Previous Image (Base underneath, 100% width, defines aspect ratio) */}
             <img
-              src={resolvedOriginalUrl}
-              alt="Original satellite imagery baseline"
-              className="compare-img base-img"
+              src={leftImageUrl}
+              alt={leftLabel}
+              className="compare-img base-layer"
               draggable={false}
             />
 
-            {/* Overlaid Image (Clipped by slider position) */}
+            {/* Layer 2: Right / Current or Overlay Image (Clipped from left using inset) */}
             <div
-              className="compare-overlay-wrap"
-              style={{ width: `${sliderPos}%` }}
+              className="compare-clipped-wrap"
+              style={{
+                clipPath: `inset(0 0 0 ${sliderPos}%)`,
+                WebkitClipPath: `inset(0 0 0 ${sliderPos}%)`,
+              }}
             >
               <img
-                src={resolvedImageUrl}
-                alt="Analyzed satellite overlay"
-                className="compare-img overlay-img"
+                src={rightImageUrl}
+                alt={rightLabel}
+                className="compare-img top-layer"
                 draggable={false}
-                style={{
-                  width: containerRef.current ? `${containerRef.current.clientWidth}px` : "100%",
-                }}
               />
             </div>
 
-            {/* Draggable Divider Handle */}
+            {/* Vertical Divider Line with Grab Handle */}
             <div
-              className="swipe-divider"
+              className="swipe-divider-line"
               style={{ left: `${sliderPos}%` }}
-              onMouseDown={handleMouseDown}
-              onTouchStart={handleMouseDown}
             >
-              <div className="divider-handle">
-                <SlidersHorizontal size={14} />
+              <div className="swipe-handle-knob" title="Drag left or right to compare">
+                <ChevronsLeftRight size={15} strokeWidth={2.5} />
               </div>
             </div>
 
-            {/* Labels */}
-            <div className="compare-label left">Overlay</div>
-            <div className="compare-label right">Original</div>
           </div>
         ) : (
           <div className="single-viewport">
             <img
-              src={resolvedImageUrl}
+              src={resolvedSingleImageUrl}
               alt="High-resolution satellite analysis result"
               className="visual-main-image"
               loading="lazy"
@@ -380,43 +545,65 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
         )}
       </div>
 
-      {/* Contextual Visual Color Legend */}
+      {/* Contextual Visual Color Legend: Differentiating land, building, and other classes */}
       {hasLandCover && (
         <div className="visual-card-legend">
-          <span className="visual-legend-title">Land Palette:</span>
+          <span className="visual-legend-title">Land Cover Palette:</span>
           <div className="visual-legend-items">
-            {showLandClass("water") && <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#143c8c" }} />
-              <span>Water (Dark Blue)</span>
-            </span>}
-            {showLandClass("vegetation") && <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#22c55e" }} />
-              <span>Grass (Green)</span>
-            </span>}
-            {showLandClass("woodland") && <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#166534" }} />
-              <span>Forest (Dark Green)</span>
-            </span>}
-            {showLandClass("unknown") && <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#c29b38" }} />
-              <span>Unclassified Surface (Amber)</span>
-            </span>}
-            {showLandClass("bare_pervious") && <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#a68250" }} />
-              <span>Bare Soil / Pervious (Tan)</span>
-            </span>}
-            {showLandClass("road") && <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#f5c81e" }} />
-              <span>Roads / Paved (Yellow)</span>
-            </span>}
-            {showLandClass("built_up") && <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#dc3545" }} />
-              <span>Built-up (Red)</span>
-            </span>}
-            {showLandClass("agriculture") && <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#7cb342" }} />
-              <span>Cropland (Olive)</span>
-            </span>}
+            {showLandClass("built_up") && (
+              <span className="visual-legend-item">
+                <span className="legend-swatch" style={{ background: "#dc2626" }} />
+                <span>Buildings / Built-up (Red)</span>
+              </span>
+            )}
+            {showLandClass("bare_pervious") && (
+              <span className="visual-legend-item">
+                <span className="legend-swatch" style={{ background: "#d97706" }} />
+                <span>Land / Bare Soil (Amber)</span>
+              </span>
+            )}
+            {showLandClass("road") && (
+              <span className="visual-legend-item">
+                <span className="legend-swatch" style={{ background: "#facc15" }} />
+                <span>Roads & Paved (Yellow)</span>
+              </span>
+            )}
+            {showLandClass("vegetation") && (
+              <span className="visual-legend-item">
+                <span className="legend-swatch" style={{ background: "#22c55e" }} />
+                <span>Grass & Canopy (Green)</span>
+              </span>
+            )}
+            {showLandClass("woodland") && (
+              <span className="visual-legend-item">
+                <span className="legend-swatch" style={{ background: "#166534" }} />
+                <span>Forest (Dark Green)</span>
+              </span>
+            )}
+            {showLandClass("water") && (
+              <span className="visual-legend-item">
+                <span className="legend-swatch" style={{ background: "#1d4ed8" }} />
+                <span>Water (Deep Blue)</span>
+              </span>
+            )}
+            {showLandClass("swimming_pool") && (
+              <span className="visual-legend-item">
+                <span className="legend-swatch" style={{ background: "#06b6d4" }} />
+                <span>Swimming Pool (Cyan)</span>
+              </span>
+            )}
+            {showLandClass("agriculture") && (
+              <span className="visual-legend-item">
+                <span className="legend-swatch" style={{ background: "#7cb342" }} />
+                <span>Cropland (Olive)</span>
+              </span>
+            )}
+            {showLandClass("unknown") && (
+              <span className="visual-legend-item">
+                <span className="legend-swatch" style={{ background: "#9ca3af" }} />
+                <span>Unclassified (Gray)</span>
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -426,16 +613,16 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
           <span className="visual-legend-title">Water Palette:</span>
           <div className="visual-legend-items">
             <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#143c8c" }} />
-              <span>Water Surface (Dark Blue)</span>
+              <span className="legend-swatch" style={{ background: "#1d4ed8" }} />
+              <span>Water Surface (Deep Blue)</span>
             </span>
             <span className="visual-legend-item">
               <span className="legend-swatch" style={{ background: "#0f2d78" }} />
               <span>Deep Water / Core (Navy)</span>
             </span>
             <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#c29b38" }} />
-              <span>Land / Shoreline (Dark Yellow)</span>
+              <span className="legend-swatch" style={{ background: "#d97706" }} />
+              <span>Land / Shoreline (Amber Tan)</span>
             </span>
           </div>
         </div>
@@ -446,12 +633,16 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
           <span className="visual-legend-title">Building Palette:</span>
           <div className="visual-legend-items">
             <span className="visual-legend-item">
-              <span className="legend-swatch" style={{ background: "#dc3545" }} />
-              <span>Building Footprints (Warm Red)</span>
+              <span className="legend-swatch" style={{ background: "#dc2626" }} />
+              <span>Building Footprints (Crimson Red)</span>
             </span>
             <span className="visual-legend-item">
               <span className="legend-swatch" style={{ background: "#ffffff", border: "1px solid #999" }} />
               <span>Instance Boundaries (White)</span>
+            </span>
+            <span className="visual-legend-item">
+              <span className="legend-swatch" style={{ background: "#d97706" }} />
+              <span>Surrounding Ground (Amber)</span>
             </span>
           </div>
         </div>

@@ -78,7 +78,13 @@ def _starts(length: int, tile_size: int, step: int) -> list[int]:
     values = list(range(0, length - tile_size + 1, step))
     last = length - tile_size
     if values[-1] != last:
-        values.append(last)
+        # If the gap between the last stepped tile and the edge is tiny (< 64px),
+        # adjust the last start to `last` while maintaining safe overlap (>= 64px)
+        # with the preceding tile. This avoids nearly 100% redundant border tiles.
+        if len(values) >= 2 and (last - values[-2]) <= (tile_size - 64) and (last - values[-1]) < 64:
+            values[-1] = last
+        else:
+            values.append(last)
     return values
 
 
