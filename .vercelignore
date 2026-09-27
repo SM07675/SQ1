@@ -1,0 +1,13 @@
+backend/
+artifacts/
+models/
+data/
+venv/
+.venv/
+.pytest_cache/
+tests/
+tests_integrated/
+infra/
+docs/
+scratch/
+out_tmp/

@@ -211,6 +211,7 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
       iconClass: "chip-icon-land",
       text: "Classify dominant land cover types",
       type: "single" as const,
+      preload: false,
     },
     {
       label: "Detect water",
@@ -218,6 +219,7 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
       iconClass: "chip-icon-water",
       text: "Find all water bodies and calculate coverage",
       type: "single" as const,
+      preload: false,
     },
     {
       label: "Count buildings",
@@ -225,6 +227,7 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
       iconClass: "chip-icon-building",
       text: "Count all visible building footprints",
       type: "single" as const,
+      preload: false,
     },
     {
       label: "Compare images",
@@ -232,6 +235,7 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
       iconClass: "chip-icon-compare",
       text: "Compare these images to detect changes",
       type: "bitemporal" as const,
+      preload: true,
     },
     {
       label: "Analyze change",
@@ -239,6 +243,7 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
       iconClass: "chip-icon-change",
       text: "Detect and quantify surface changes over time",
       type: "bitemporal" as const,
+      preload: true,
     },
   ];
 
@@ -350,15 +355,30 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
                   className="suggestion-chip-btn"
                   onClick={() => {
                     setQuery(action.text);
-                    if (attachedFiles.length === 0) {
-                      loadDemoScene(action.type);
+                    if (action.preload) {
+                      if (attachedFiles.length === 0) {
+                        loadDemoScene(action.type);
+                      }
+                    } else {
+                      // Remove any preloaded sample/demo imagery so only text prompt is active
+                      setAttachedFiles((prev) =>
+                        prev.filter(
+                          (item) =>
+                            !item.file.name.toLowerCase().includes("sample") &&
+                            !item.file.name.toLowerCase().includes("demo")
+                        )
+                      );
                     }
                     setTimeout(() => {
                       adjustHeight();
                       textareaRef.current?.focus();
                     }, 60);
                   }}
-                  title={`Click to load prompt & scene: ${action.text}`}
+                  title={
+                    action.preload
+                      ? `Click to load prompt & scene: ${action.text}`
+                      : `Click to set prompt: ${action.text}`
+                  }
                 >
                   <span className={action.iconClass}>{action.icon}</span>
                   <span>{action.label}</span>
