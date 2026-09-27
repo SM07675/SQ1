@@ -29,6 +29,7 @@ interface TopNavProps {
   clusterOnline?: boolean;
   clusterState?: "online" | "starting" | "standby";
   onToggleClusterPower?: () => void;
+  autoSleepSecondsRemaining?: number;
   authUser?: AuthUser | null;
   onLogout?: () => void;
 }
@@ -46,6 +47,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   clusterOnline = true,
   clusterState = "online",
   onToggleClusterPower,
+  autoSleepSecondsRemaining,
   authUser,
   onLogout,
 }) => {
@@ -203,7 +205,9 @@ export const TopNav: React.FC<TopNavProps> = ({
               clusterState === "starting"
                 ? "AI Node is Starting... (Click to view live progress)"
                 : clusterOnline
-                ? "Cluster is Online (Click to sleep & save credits)"
+                ? autoSleepSecondsRemaining !== undefined
+                  ? `Cluster Online · Auto-sleeps after 10m idle (${Math.floor(autoSleepSecondsRemaining / 60)}m ${autoSleepSecondsRemaining % 60}s remaining). Click to sleep now.`
+                  : "Cluster is Online (Click to sleep & save credits)"
                 : "Cluster is in Standby (Click to wake up)"
             }
             aria-label={
@@ -219,7 +223,11 @@ export const TopNav: React.FC<TopNavProps> = ({
               {clusterState === "starting"
                 ? "Starting..."
                 : clusterOnline
-                ? "16GB Online"
+                ? autoSleepSecondsRemaining !== undefined
+                  ? autoSleepSecondsRemaining <= 60
+                    ? `16GB Online · ${autoSleepSecondsRemaining}s`
+                    : `16GB Online · ${Math.ceil(autoSleepSecondsRemaining / 60)}m`
+                  : "16GB Online"
                 : "Standby"}
             </span>
           </button>

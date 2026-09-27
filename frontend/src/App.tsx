@@ -139,9 +139,11 @@ export default function App() {
   const suppressHashChangeRef = useRef(false);
 
   // Cluster Scale-to-Zero State
+  const IDLE_TIMEOUT_SECONDS = 10 * 60; // 10 minutes auto-shutdown timeout
   const [isWakeModalOpen, setIsWakeModalOpen] = useState(false);
   const [clusterOnline, setClusterOnline] = useState(false);
   const [clusterState, setClusterState] = useState<"online" | "starting" | "standby">("starting");
+  const [autoSleepSecondsRemaining, setAutoSleepSecondsRemaining] = useState<number>(IDLE_TIMEOUT_SECONDS);
   const [autoFocusTrigger, setAutoFocusTrigger] = useState(0);
   const [pendingMessage, setPendingMessage] = useState<{
     query: string;
@@ -243,45 +245,78 @@ export default function App() {
     return () => clearInterval(interval);
   }, [clusterOnline, handleClusterReady]);
 
-  // ── Auto-Shutdown Inactivity Watchdog (20 Minutes) ──────────────────────────
-  // Automatically puts E2E node to sleep if no user activity for 20 minutes
+  // ── Auto-Shutdown Inactivity Watchdog (10 Minutes) ──────────────────────────
+  // Automatically puts E2E node to sleep if no user activity for 10 minutes
   useEffect(() => {
-    let idleTimer: any = null;
+    const LAST_ACTIVE_KEY = "satquery_last_active_time";
+    if (!localStorage.getItem(LAST_ACTIVE_KEY)) {
+      localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+    }
 
-    const triggerAutoSleep = async () => {
-      try {
-        if (!clusterOnline) return;
-        console.log("[SatQuery Eco] 20 min idle timeout reached. Putting AI node to sleep...");
-        await fetch("/e2e/sleep", { method: "POST" });
-        setClusterOnline(false);
-        setClusterState("standby");
-        addToast("info", "💤 SatQuery AI Node went to sleep to protect your cloud credits.");
-      } catch (err) {
-        console.warn("Auto-sleep error:", err);
+    let lastThrottle = 0;
+    const markActive = () => {
+      localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+    };
+
+    const handleMouseMove = () => {
+      const now = Date.now();
+      // Throttle mouse moves to avoid constant resetting from ambient trackpad jitter
+      if (now - lastThrottle > 10000) {
+        lastThrottle = now;
+        markActive();
       }
     };
 
-    const resetIdleTimer = () => {
-      clearTimeout(idleTimer);
-      // 20 minutes = 1,200,000 ms
-      idleTimer = setTimeout(() => {
-        triggerAutoSleep();
-      }, 20 * 60 * 1000);
-    };
+    window.addEventListener("click", markActive, { passive: true });
+    window.addEventListener("keydown", markActive, { passive: true });
+    window.addEventListener("touchstart", markActive, { passive: true });
+    window.addEventListener("scroll", markActive, { passive: true });
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
 
-    window.addEventListener("mousemove", resetIdleTimer, { passive: true });
-    window.addEventListener("keydown", resetIdleTimer, { passive: true });
-    window.addEventListener("click", resetIdleTimer, { passive: true });
-    window.addEventListener("scroll", resetIdleTimer, { passive: true });
+    let warned60s = false;
 
-    resetIdleTimer();
+    const interval = setInterval(async () => {
+      if (!clusterOnline) {
+        setAutoSleepSecondsRemaining(IDLE_TIMEOUT_SECONDS);
+        warned60s = false;
+        return;
+      }
+
+      const lastActive = Number(localStorage.getItem(LAST_ACTIVE_KEY) || Date.now());
+      const elapsedSec = Math.floor((Date.now() - lastActive) / 1000);
+      const remainingSec = Math.max(0, IDLE_TIMEOUT_SECONDS - elapsedSec);
+
+      setAutoSleepSecondsRemaining(remainingSec);
+
+      // 60-second advance notice toast
+      if (remainingSec <= 60 && remainingSec > 50 && !warned60s) {
+        warned60s = true;
+        addToast("info", "⏳ Eco Notice: SatQuery AI Node will auto-sleep in 60s to protect cloud credits. Click anywhere to stay active.");
+      } else if (remainingSec > 60) {
+        warned60s = false;
+      }
+
+      // 10-Minute Timeout Reached: Trigger Sleep
+      if (remainingSec <= 0) {
+        console.log("[SatQuery Eco] 10 min idle reached. Putting AI node to sleep...");
+        try {
+          await fetch("/e2e/sleep", { method: "POST" });
+          setClusterOnline(false);
+          setClusterState("standby");
+          addToast("info", "💤 SatQuery AI Node entered auto-sleep after 10 min of inactivity (₹0.00 credit burn).");
+        } catch (err) {
+          console.warn("Auto-sleep error:", err);
+        }
+      }
+    }, 1000);
 
     return () => {
-      clearTimeout(idleTimer);
-      window.removeEventListener("mousemove", resetIdleTimer);
-      window.removeEventListener("keydown", resetIdleTimer);
-      window.removeEventListener("click", resetIdleTimer);
-      window.removeEventListener("scroll", resetIdleTimer);
+      clearInterval(interval);
+      window.removeEventListener("click", markActive);
+      window.removeEventListener("keydown", markActive);
+      window.removeEventListener("touchstart", markActive);
+      window.removeEventListener("scroll", markActive);
+      window.removeEventListener("mousemove", handleMouseMove);
     };
   }, [clusterOnline]);
 
@@ -664,6 +699,7 @@ export default function App() {
         clusterOnline={clusterOnline}
         clusterState={clusterState}
         onToggleClusterPower={handleToggleClusterPower}
+        autoSleepSecondsRemaining={autoSleepSecondsRemaining}
         authUser={authUser}
         onLogout={handleLogout}
       />
