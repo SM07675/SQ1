@@ -222,6 +222,42 @@ CDVQA_FROZEN_SAMPLES: tuple[VRSBenchSample, ...] = (
     ),
 )
 
+BIGEARTHNET_FROZEN_SAMPLES: tuple[VRSBenchSample, ...] = (
+    VRSBenchSample(
+        sample_id="BEN-S2-001",
+        category=VRSBenchCategory.LAND_COVER_VERIFICATION,
+        question="Classify the dominant land cover classes in this BigEarthNet Sentinel-2 multispectral tile.",
+        expected_answer="Broad-leaved forest and mixed forest canopy with natural grassland.",
+        keywords=("forest", "broad-leaved", "mixed", "grassland", "canopy"),
+        ground_truth_boxes=[],
+        expected_variant="earthdial-4b-ms",
+        band_count=10,
+        description="BigEarthNet v2.0 Corine Land Cover multi-label scene verification",
+    ),
+    VRSBenchSample(
+        sample_id="BEN-S2-002",
+        category=VRSBenchCategory.OPTICAL_VQA,
+        question="Are commercial units or urban fabric detected in this scene?",
+        expected_answer="Yes, distinct urban fabric and industrial commercial units are present.",
+        keywords=("urban", "fabric", "industrial", "commercial", "units"),
+        ground_truth_boxes=[],
+        expected_variant="earthdial-4b-rgb",
+        band_count=3,
+        description="BigEarthNet urban fabric scene verification",
+    ),
+    VRSBenchSample(
+        sample_id="BEN-S1-003",
+        category=VRSBenchCategory.MULTISPECTRAL_VQA,
+        question="Does the Sentinel-1 SAR dual-polarization backscatter confirm inland water presence?",
+        expected_answer="Low specular backscatter in VV and VH confirms inland water body.",
+        keywords=("water", "inland", "backscatter", "sar", "specular"),
+        ground_truth_boxes=[],
+        expected_variant="earthdial-4b-ms",
+        band_count=2,
+        description="BigEarthNet SAR water classification verification",
+    ),
+)
+
 
 def list_available_datasets() -> list[DatasetSummary]:
     return [
@@ -231,6 +267,13 @@ def list_available_datasets() -> list[DatasetSummary]:
             total_samples=len(VRSBENCH_FROZEN_SAMPLES),
             categories=[cat.value for cat in VRSBenchCategory],
             supported_models=["earthdial-4b-rgb", "earthdial-4b-ms", "managed-geospatial-vlm"],
+        ),
+        DatasetSummary(
+            name="bigearthnet_sample_split",
+            description="BigEarthNet v2.0 (reBEN) multi-spectral & SAR 19-class Corine Land Cover scene adaptation split.",
+            total_samples=len(BIGEARTHNET_FROZEN_SAMPLES),
+            categories=["land_cover_verification", "optical_vqa", "multispectral_vqa"],
+            supported_models=["bigearthnet-s2", "bigearthnet-s1", "earthdial-4b-ms"],
         ),
         DatasetSummary(
             name="rsvqa_lr_sample_split",
@@ -260,6 +303,8 @@ async def run_vrsbench_suite(
         samples = list(RSVQA_FROZEN_SAMPLES)
     elif dataset_name == "cdvqa_bitemporal_split":
         samples = list(CDVQA_FROZEN_SAMPLES)
+    elif dataset_name == "bigearthnet_sample_split":
+        samples = list(BIGEARTHNET_FROZEN_SAMPLES)
     else:
         samples = list(VRSBENCH_FROZEN_SAMPLES)
 

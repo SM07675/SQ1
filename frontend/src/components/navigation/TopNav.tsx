@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Sparkles,
   Compass,
@@ -9,8 +9,12 @@ import {
   Settings,
   PanelLeft,
   SquarePen,
+  LogOut,
+  History,
+  Shield,
 } from "lucide-react";
 import type { NavTab, ThemeMode } from "../../types";
+import type { AuthUser } from "../views/LoginPage";
 
 interface TopNavProps {
   activeTab: NavTab;
@@ -24,6 +28,8 @@ interface TopNavProps {
   onOpenSettings: () => void;
   clusterOnline?: boolean;
   onToggleClusterPower?: () => void;
+  authUser?: AuthUser | null;
+  onLogout?: () => void;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
@@ -38,7 +44,24 @@ export const TopNav: React.FC<TopNavProps> = ({
   onOpenSettings,
   clusterOnline = true,
   onToggleClusterPower,
+  authUser,
+  onLogout,
 }) => {
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close profile dropdown on click outside
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [profileMenuOpen]);
+
   return (
     <header className={`satquery-topnav ${isHistoryOpen ? "sidebar-open" : ""}`} role="banner">
       {/* Brand logo pill (Clean branding, no 3-line hamburger menu icon) */}
@@ -168,52 +191,101 @@ export const TopNav: React.FC<TopNavProps> = ({
           <Settings size={18} strokeWidth={2} />
         </button>
 
-        <button
-          type="button"
-          className="topnav-btn history-toggle-btn"
-          onClick={onToggleHistory}
-          title={isHistoryOpen ? "Close history" : "Open history"}
-          aria-label={isHistoryOpen ? "Close history" : "Open history"}
-          id="history-drawer-toggle"
-          style={{ display: "none" }} // History accessed via drawer icon
-        >
-          <PanelLeft size={18} />
-        </button>
-
-        {/* E2E Cluster Power Controller */}
+        {/* E2E Cluster Power Controller with dedicated Apple Glass styling */}
         {onToggleClusterPower && (
           <button
             type="button"
             onClick={onToggleClusterPower}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border transition cursor-pointer ${
+            className={`cluster-power-pill ${clusterOnline ? "online" : "standby"}`}
+            title={
               clusterOnline
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
-                : "bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
-            }`}
-            title={clusterOnline ? "Cluster is Online (Click to sleep & save credits)" : "Cluster is in Standby (Click to wake up)"}
-            style={{ fontSize: "11px", height: "28px" }}
+                ? "Cluster is Online (Click to sleep & save credits)"
+                : "Cluster is in Standby (Click to wake up)"
+            }
+            aria-label={clusterOnline ? "Cluster is Online" : "Cluster is in Standby"}
           >
-            <span
-              className={`w-2 h-2 rounded-full ${
-                clusterOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"
-              }`}
-            />
+            <span className="cluster-power-dot" />
             <span>{clusterOnline ? "16GB Online" : "Standby"}</span>
           </button>
         )}
 
-        <div
-          className="user-profile-badge"
-          title="Active Session"
-          onClick={onToggleHistory}
-          role="button"
-          tabIndex={0}
-          aria-label="Open conversation history"
-        >
-          <span className="user-avatar-initials">HS</span>
-          <span className="status-indicator-dot" title="Ready" />
+        {/* User profile badge with interactive profile popover menu */}
+        <div className="topnav-profile-wrap" ref={profileMenuRef}>
+          <div
+            className="user-profile-badge"
+            title={`${authUser?.name || "Active Session"} · ${authUser?.role || "Analyst"}`}
+            onClick={() => setProfileMenuOpen((prev) => !prev)}
+            role="button"
+            tabIndex={0}
+            aria-label="Open account menu"
+            aria-expanded={profileMenuOpen}
+          >
+            <span className="user-avatar-initials">{authUser?.initials || "HS"}</span>
+            <span className="status-indicator-dot" title="Ready" />
+          </div>
+
+          {profileMenuOpen && (
+            <div className="topnav-profile-menu" role="menu">
+              <div className="profile-menu-header">
+                <div className="profile-menu-avatar">
+                  <span>{authUser?.initials || "HS"}</span>
+                </div>
+                <div className="profile-menu-user">
+                  <span className="profile-menu-name">{authUser?.name || "Harshit S."}</span>
+                  <span className="profile-menu-email">{authUser?.email || "demo@satquery.ai"}</span>
+                </div>
+              </div>
+
+              <div className="profile-menu-badge">
+                <Shield size={12} />
+                <span>{authUser?.organization || "ISRO / SIH 2026"}</span>
+              </div>
+
+              <div className="profile-menu-actions">
+                <button
+                  type="button"
+                  className="profile-menu-item"
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    onToggleHistory();
+                  }}
+                >
+                  <History size={14} />
+                  <span>Conversation History</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="profile-menu-item"
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    onOpenSettings();
+                  }}
+                >
+                  <Settings size={14} />
+                  <span>Settings & Preferences</span>
+                </button>
+
+                {onLogout && (
+                  <button
+                    type="button"
+                    className="profile-menu-item logout"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      onLogout();
+                    }}
+                  >
+                    <LogOut size={14} />
+                    <span>Sign Out / Switch Account</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>
   );
 };
+
+export default TopNav;

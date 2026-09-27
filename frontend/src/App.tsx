@@ -150,16 +150,10 @@ export default function App() {
         if (res.ok) {
           if (active) setClusterOnline(true);
         } else {
-          if (active) {
-            setClusterOnline(false);
-            setIsWakeModalOpen(true);
-          }
+          if (active) setClusterOnline(false);
         }
       } catch {
-        if (active) {
-          setClusterOnline(false);
-          setIsWakeModalOpen(true);
-        }
+        if (active) setClusterOnline(false);
       }
     };
     checkCluster();
@@ -560,6 +554,8 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         clusterOnline={clusterOnline}
         onToggleClusterPower={handleToggleClusterPower}
+        authUser={authUser}
+        onLogout={handleLogout}
       />
 
       {/* 2. Floating Left Sidebar (transfers top navigation to left sidebar per design reference) */}

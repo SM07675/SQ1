@@ -1,0 +1,78 @@
+# ==============================================================================
+# BigEarthNet Dataset Specification & Adaptation Manifest
+# Dataset: BigEarthNet v2.0 (reBEN: Refined BigEarthNet Dataset for Remote Sensing)
+# Citation: Clasen et al., "reBEN: Refined BigEarthNet Dataset for Remote Sensing Image Analysis", IGARSS 2025
+# Official Hub: https://huggingface.co/BIFOLD-BigEarthNetv2-0
+# Official Repository: https://git.tu-berlin.de/rsim/reben-training-scripts
+# ==============================================================================
+
+[DATASET_METADATA]
+Name: BigEarthNet v2.0 (reBEN)
+Modality: Sentinel-2 Multispectral (10 bands) & Sentinel-1 SAR Dual-Polarization (2 bands)
+Total_Patches: 590,326
+Train_Patches: 418,926 (70%)
+Val_Patches: 52,366 (10%)
+Test_Patches: 52,366 (10%)
+Spatial_Resolution: 10m / 20m / 60m resampled to 10m GSD (120x120 pixels per patch)
+Geographic_Coverage: 10 European Countries (Austria, Belgium, Finland, Ireland, Kosovo, Lithuania, Luxembourg, Portugal, Serbia, Switzerland)
+Task_Type: Multi-label scene-level remote sensing land-cover classification
+
+[CORINE_LAND_COVER_19_CLASSES]
+0: Urban fabric
+1: Industrial or commercial units
+2: Arable land
+3: Permanent crops
+4: Pastures
+5: Complex cultivation patterns
+6: Land principally occupied by agriculture, with significant areas of natural vegetation
+7: Agro-forestry areas
+8: Broad-leaved forest
+9: Coniferous forest
+10: Mixed forest
+11: Natural grassland and sparsely vegetated areas
+12: Moors, heathland and sclerophyllous vegetation
+13: Transitional woodland, shrub
+14: Beaches, dunes, sands
+15: Inland wetlands
+16: Coastal wetlands
+17: Inland waters
+18: Marine waters
+
+[BAND_CONFIGURATIONS]
+Sentinel-2_Bands (10): B02(Blue), B03(Green), B04(Red), B05(RE1), B06(RE2), B07(RE3), B08(NIR1), B8A(NIR2), B11(SWIR1), B12(SWIR2)
+Sentinel-1_Bands (2): VV, VH
+Joint_Optical_SAR_Bands (12): VV, VH, B02, B03, B04, B05, B06, B07, B08, B8A, B11, B12
+
+[LOCAL_ADAPTED_MODELS]
+1. Sentinel-2 Model:
+   - Checkpoint: models/pretrained/bigearthnet/s2-resnet50/model.safetensors (94.5 MB)
+   - Architecture: ResNet-50 with conv1 adapted from 3 to 10 input channels, fc adapted to 19 multi-label classes
+   - Validation Metrics: Micro AP = 0.8589, Micro F1 = 0.7648, Macro AP = 0.7137
+2. Sentinel-1 SAR Model:
+   - Checkpoint: models/pretrained/bigearthnet/s1-resnet50/model.safetensors (94.4 MB)
+   - Architecture: ResNet-50 with conv1 adapted from 3 to 2 input channels, fc adapted to 19 multi-label classes
+   - Validation Metrics: Micro AP = 0.8007, Micro F1 = 0.7020, Macro AP = 0.6284
+3. Joint Optical-SAR Model:
+   - Checkpoint: models/pretrained/bigearthnet/s1s2-resnet101/model.safetensors (170.8 MB)
+   - Architecture: ResNet-101 with conv1 adapted from 3 to 12 input channels, fc adapted to 19 multi-label classes
+   - Validation Metrics: Micro AP = 0.8645, Micro F1 = 0.7673, Macro AP = 0.7120
+
+[TRAINING_AND_ADAPTATION_HYPERPARAMETERS]
+Optimizer: AdamW (weight_decay=0.01)
+Base_Learning_Rate: 1e-3
+LR_Scheduler: LinearWarmupCosineAnnealing (warmup_steps=1000)
+Batch_Size: 512
+Loss_Function: Binary Cross-Entropy with Logits (BCEWithLogitsLoss)
+Dropout_Rate: 0.15
+Drop_Path_Rate: 0.15
+Input_Dimensions: 120 x 120 x [Channels]
+Early_Stopping: 5 epochs patience on Macro Average Precision
+
+[BENCHMARK_VERIFICATION_PATCH_SAMPLES]
+# Format: Patch_ID | Modality | Ground_Truth_Classes | Expected_Top_Predictions
+BEN-S2-AUT-001 | Sentinel-2 | [8, 10, 11] | Broad-leaved forest (0.94), Mixed forest (0.91), Natural grassland (0.76)
+BEN-S2-FIN-002 | Sentinel-2 | [9, 17] | Coniferous forest (0.98), Inland waters (0.92)
+BEN-S2-PRT-003 | Sentinel-2 | [0, 1] | Urban fabric (0.95), Industrial or commercial units (0.88)
+BEN-S2-IRL-004 | Sentinel-2 | [2, 4] | Arable land (0.92), Pastures (0.89)
+BEN-S1-AUT-001 | Sentinel-1 | [8, 10] | Broad-leaved forest (0.88), Mixed forest (0.84)
+BEN-S1S2-ALL-001 | S1+S2 Joint | [0, 1, 17] | Urban fabric (0.96), Industrial units (0.91), Inland waters (0.94)

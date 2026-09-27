@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Eye, EyeOff, Satellite, Zap, Globe, Shield, ArrowRight, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Satellite, Zap, Globe, Shield, ArrowRight, Sparkles, UserCheck, CheckCircle2 } from "lucide-react";
 
 // ── Demo Account Credentials ──────────────────────────────────────────────────
 export const DEMO_ACCOUNTS = [
@@ -7,7 +7,7 @@ export const DEMO_ACCOUNTS = [
     email: "demo@satquery.ai",
     password: "SatQuery2026!",
     name: "Harshit S.",
-    role: "Active Analyst",
+    role: "Lead Analyst",
     initials: "HS",
     organization: "ISRO / SIH 2026",
   },
@@ -38,6 +38,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [animIn, setAnimIn] = useState(false);
@@ -49,46 +50,93 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
     return () => clearTimeout(t);
   }, []);
 
+  const executeLogin = async (user: AuthUser) => {
+    setLoggingIn(true);
+    await new Promise((res) => setTimeout(res, 350));
+    onLogin(user);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    await new Promise((res) => setTimeout(res, 900));
+    await new Promise((res) => setTimeout(res, 600));
 
+    const trimmedEmail = email.trim().toLowerCase();
     const match = DEMO_ACCOUNTS.find(
-      (a) => a.email.toLowerCase() === email.trim().toLowerCase() && a.password === password
+      (a) => a.email.toLowerCase() === trimmedEmail && a.password === password
     );
 
     if (match) {
-      // Fade out the login page before transitioning to the app
-      setLoggingIn(true);
-      await new Promise((res) => setTimeout(res, 350));
-      onLogin({
+      await executeLogin({
         email: match.email,
         name: match.name,
         role: match.role,
         initials: match.initials,
         organization: match.organization,
       });
+    } else if (trimmedEmail.includes("@") && password.length >= 3) {
+      // Universal Access: Support ANY evaluator, judge, or custom user smoothly
+      const localPart = trimmedEmail.split("@")[0];
+      const formattedName =
+        localPart
+          .split(/[._-]/)
+          .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+          .join(" ") || "Verified Analyst";
+      const initials = (formattedName.split(" ").map((w) => w[0]).join("") || "VA").slice(0, 2).toUpperCase();
+
+      await executeLogin({
+        email: email.trim(),
+        name: formattedName,
+        role: "Senior Geospatial Analyst",
+        initials: initials,
+        organization: "SIH 2026 / ISRO Workspace",
+      });
     } else {
-      setError("Invalid email or password. Try the demo account below.");
+      setError("Please enter a valid email address and password (min 3 characters).");
       setLoading(false);
     }
+  };
+
+  const handleInstantDemoLogin = async (account: typeof DEMO_ACCOUNTS[0]) => {
+    setEmail(account.email);
+    setPassword(account.password);
+    setError(null);
+    setLoading(true);
+    await new Promise((res) => setTimeout(res, 350));
+    await executeLogin({
+      email: account.email,
+      name: account.name,
+      role: account.role,
+      initials: account.initials,
+      organization: account.organization,
+    });
+  };
+
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    await new Promise((res) => setTimeout(res, 300));
+    await executeLogin({
+      email: "guest.evaluator@sih.gov.in",
+      name: "Guest Evaluator",
+      role: "SIH Jury / Evaluator",
+      initials: "GE",
+      organization: "SIH 2026 Evaluation Panel",
+    });
   };
 
   const fillDemo = (account: typeof DEMO_ACCOUNTS[0]) => {
     setEmail(account.email);
     setPassword(account.password);
     setError(null);
-    setDemoExpanded(false);
   };
 
   const features = [
-    { icon: <Satellite size={18} />, label: "Satellite Image Analysis" },
-    { icon: <Zap size={18} />, label: "AI-Powered Insights" },
-    { icon: <Globe size={18} />, label: "Geospatial Intelligence" },
-    { icon: <Shield size={18} />, label: "Secure & Verified Data" },
+    { icon: <Satellite size={18} />, label: "Satellite Image Analysis (GeoTIFF, Multispectral)" },
+    { icon: <Zap size={18} />, label: "AI-Powered Visual & Natural Language Querying" },
+    { icon: <Globe size={18} />, label: "Dual-Node E2E Scale-to-Zero Architecture" },
+    { icon: <Shield size={18} />, label: "Scientific GDAL Raster Verification & Audit Trail" },
   ];
 
   return (
@@ -123,7 +171,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
 
         <div className="login-badge">
           <Sparkles size={13} />
-          <span>SIH 2026 - Problem ID 26167</span>
+          <span>SIH 2026 · Problem Statement 26167 · ISRO</span>
         </div>
       </div>
 
@@ -139,6 +187,42 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
             <p className="login-card-sub">Sign in to your SatQuery workspace</p>
           </div>
 
+          {/* 1-Click Quick Demo Login Cards */}
+          <div className="login-quick-cards">
+            {DEMO_ACCOUNTS.map((acc, idx) => (
+              <button
+                key={idx}
+                type="button"
+                className="login-quick-card"
+                onClick={() => handleInstantDemoLogin(acc)}
+                title={`Instant 1-Click Sign In as ${acc.name}`}
+              >
+                <div className="login-quick-avatar">
+                  <span>{acc.initials}</span>
+                </div>
+                <div className="login-quick-info">
+                  <span className="login-quick-name">{acc.name}</span>
+                  <span className="login-quick-role">{acc.role}</span>
+                </div>
+                <Sparkles size={13} style={{ color: "#38bdf8", flexShrink: 0 }} />
+              </button>
+            ))}
+          </div>
+
+          {/* Credentials Auto-Fill Hint */}
+          <div className="login-hint-pill">
+            <span>
+              Demo: <span className="login-hint-code">demo@satquery.ai</span> / <span className="login-hint-code">SatQuery2026!</span>
+            </span>
+            <button
+              type="button"
+              className="login-hint-action"
+              onClick={() => fillDemo(DEMO_ACCOUNTS[0])}
+            >
+              Fill
+            </button>
+          </div>
+
           {/* Form */}
           <form className="login-form" onSubmit={handleSubmit} noValidate>
             <div className="login-field-group">
@@ -148,7 +232,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
                 type="email"
                 autoComplete="email"
                 className={`login-input ${error ? "error" : ""}`}
-                placeholder="you@satquery.ai"
+                placeholder="you@satquery.ai or custom email"
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(null); }}
                 required
@@ -163,7 +247,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
                   className={`login-input ${error ? "error" : ""}`}
-                  placeholder="**********"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); setError(null); }}
                   required
@@ -177,6 +261,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
+            </div>
+
+            <div className="login-remember-row">
+              <label className="login-remember-label">
+                <input
+                  type="checkbox"
+                  className="login-remember-checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                <span>Remember this session</span>
+              </label>
             </div>
 
             {/* Error message */}
@@ -203,14 +299,25 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
             </button>
           </form>
 
+          {/* Guest / Instant Evaluator Access */}
+          <button
+            type="button"
+            className="login-guest-btn"
+            onClick={handleGuestLogin}
+            title="Instant access without password"
+          >
+            <UserCheck size={16} />
+            <span>⚡ Continue as Guest / Evaluator</span>
+          </button>
+
           {/* Divider */}
-          <div className="login-divider">
+          <div className="login-divider" style={{ marginTop: "16px" }}>
             <span className="login-divider-line" />
-            <span className="login-divider-text">or try a demo account</span>
+            <span className="login-divider-text">more options</span>
             <span className="login-divider-line" />
           </div>
 
-          {/* Demo Accounts */}
+          {/* Demo Accounts List Accordion */}
           <div className="login-demo-section">
             <button
               type="button"
@@ -219,7 +326,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
               aria-expanded={demoExpanded}
             >
               <Sparkles size={14} />
-              <span>Demo Accounts</span>
+              <span>All Pre-configured Demo Accounts</span>
               <span className={`login-demo-chevron ${demoExpanded ? "open" : ""}`}>
                 {demoExpanded ? "▴" : "▾"}
               </span>
@@ -239,10 +346,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
                     </div>
                     <div className="login-demo-info">
                       <span className="login-demo-name">{account.name}</span>
-                      <span className="login-demo-role">{account.role}</span>
+                      <span className="login-demo-role">{account.role} · {account.organization}</span>
                       <span className="login-demo-email">{account.email}</span>
                     </div>
-                    <span className="login-demo-use">Use</span>
+                    <span className="login-demo-use">Auto Fill</span>
                   </button>
                 ))}
               </div>
@@ -252,7 +359,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ theme, onLogin }) => {
           {/* Footer */}
           <p className="login-footer-note">
             Prototype · SIH 2026 · Problem Statement 26167<br />
-            <span>All analysis is AI-assisted. Verify critical results.</span>
+            <span>ISRO Geospatial AI Analysis Platform. Verify critical results.</span>
           </p>
         </div>
       </div>
