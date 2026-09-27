@@ -13,6 +13,10 @@ interface ComposerProps {
   placeholder?: string;
   initialQuery?: string;
   initialFiles?: File[];
+  clusterOnline?: boolean;
+  clusterState?: "online" | "starting" | "standby";
+  autoFocusTrigger?: number;
+  onOpenWakeModal?: () => void;
 }
 
 export const Composer: React.FC<ComposerProps> = ({
@@ -25,6 +29,10 @@ export const Composer: React.FC<ComposerProps> = ({
   placeholder: customPlaceholder,
   initialQuery = "",
   initialFiles = [],
+  clusterOnline = true,
+  clusterState = "online",
+  autoFocusTrigger,
+  onOpenWakeModal,
 }) => {
   const [query, setQuery] = useState(initialQuery);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFileItem[]>([]);
@@ -33,6 +41,18 @@ export const Composer: React.FC<ComposerProps> = ({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus query input whenever system becomes ready or autoFocusTrigger fires
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      const parentCard = textareaRef.current.closest(".composer-card");
+      if (parentCard) {
+        parentCard.classList.add("input-pulse-ready");
+        setTimeout(() => parentCard.classList.remove("input-pulse-ready"), 2400);
+      }
+    }
+  }, [autoFocusTrigger, clusterOnline]);
 
   // Sync initial query if changed
   useEffect(() => {
@@ -195,6 +215,7 @@ export const Composer: React.FC<ComposerProps> = ({
 
   const getDynamicPlaceholder = () => {
     if (customPlaceholder) return customPlaceholder;
+    if (clusterState === "starting") return "Waiting for system to start... You can enter your query now, it will execute once ready.";
     if (attachedFiles.length === 2) return "Ask what changed between these satellite images…";
     if (attachedFiles.length === 1) return "Ask about this satellite imagery…";
     return "Ask a follow-up about this imagery…";
@@ -209,6 +230,21 @@ export const Composer: React.FC<ComposerProps> = ({
 
   return (
     <div className="composer-container">
+      {/* Cluster starting notice */}
+      {clusterState === "starting" && (
+        <div
+          className="composer-cluster-starting-pill"
+          onClick={onOpenWakeModal}
+          role="button"
+          tabIndex={0}
+          title="Click to view startup progress"
+        >
+          <span className="home-cluster-starting-dot" />
+          <span>Waiting for system to start (E2E Node C3-16GB-578)</span>
+          <span className="home-cluster-view-btn">View Status &rarr;</span>
+        </div>
+      )}
+
       {/* Context indicator if following up on previous result */}
       {activeContextImageName && attachedFiles.length === 0 && (
         <div className="composer-context-tray">

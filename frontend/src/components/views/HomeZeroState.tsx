@@ -17,17 +17,37 @@ interface HomeZeroStateProps {
   busy: boolean;
   recentChats: ChatSummary[];
   onSelectChat: (chatId: string) => void;
+  clusterOnline?: boolean;
+  clusterState?: "online" | "starting" | "standby";
+  autoFocusTrigger?: number;
+  onOpenWakeModal?: () => void;
 }
 
 export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
   onSendMessage,
   busy,
+  clusterOnline = true,
+  clusterState = "online",
+  autoFocusTrigger,
+  onOpenWakeModal,
 }) => {
   const [query, setQuery] = useState("");
   const [attachedFiles, setAttachedFiles] = useState<AttachedFileItem[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus query input whenever system becomes ready or autoFocusTrigger fires
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      const parentCard = textareaRef.current.closest(".floating-composer");
+      if (parentCard) {
+        parentCard.classList.add("input-pulse-ready");
+        setTimeout(() => parentCard.classList.remove("input-pulse-ready"), 2400);
+      }
+    }
+  }, [autoFocusTrigger, clusterOnline]);
 
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -232,6 +252,20 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
 
         {/* Main composer */}
         <div className="hero-composer-wrapper">
+          {clusterState === "starting" && (
+            <div
+              className="home-cluster-starting-pill"
+              onClick={onOpenWakeModal}
+              role="button"
+              tabIndex={0}
+              title="Click to view node startup progress"
+            >
+              <span className="home-cluster-starting-dot" />
+              <span>Waiting for system to start... (E2E Node C3-16GB-578)</span>
+              <span className="home-cluster-view-btn">View Live Status &rarr;</span>
+            </div>
+          )}
+
           <div className="composer-container">
             <div
               className={`floating-composer ${isDragging ? "dragging" : ""} ${busy ? "busy" : ""} ${
@@ -276,11 +310,14 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
                   <ImagePlus size={19} strokeWidth={1.8} />
                 </button>
 
-
                 <textarea
                   ref={textareaRef}
                   className="composer-textarea"
-                  placeholder="Ask anything about satellite imagery (or select a quick prompt below)..."
+                  placeholder={
+                    clusterState === "starting"
+                      ? "Waiting for system to start... You can enter your query now, it will execute once ready."
+                      : "Ask anything about satellite imagery (or select a quick prompt below)..."
+                  }
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyDown}

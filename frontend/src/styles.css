@@ -12441,6 +12441,261 @@ img {
 }
 
 /* ==========================================================================
+   CLUSTER WAKE — MULTI-STEP PROGRESS & STARTING BANNER STYLES
+   ========================================================================== */
+.cluster-pulse-icon {
+  animation: clusterRadarPulse 1.8s infinite ease-in-out;
+  color: #38bdf8;
+}
+
+@keyframes clusterRadarPulse {
+  0% { transform: scale(0.95); opacity: 0.8; filter: drop-shadow(0 0 2px rgba(56, 189, 248, 0.4)); }
+  50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.9)); }
+  100% { transform: scale(0.95); opacity: 0.8; filter: drop-shadow(0 0 2px rgba(56, 189, 248, 0.4)); }
+}
+
+.cluster-wake-scale-tag.ready {
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.cluster-wake-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 520px) {
+  .cluster-wake-steps-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.cluster-step-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all var(--trans-fast);
+}
+
+.cluster-step-item.active {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
+}
+
+.cluster-step-item.completed {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.cluster-step-bullet {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.cluster-step-item.active .cluster-step-bullet {
+  background: #0284c7;
+  color: #ffffff;
+  animation: pulseStartingDot 1.4s infinite ease-in-out;
+}
+
+.cluster-step-item.completed .cluster-step-bullet {
+  background: #059669;
+  color: #ffffff;
+}
+
+.cluster-step-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cluster-step-label span {
+  font-size: 11px;
+  font-weight: 650;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cluster-step-item.active .cluster-step-label span {
+  color: #38bdf8;
+}
+
+.cluster-step-item.completed .cluster-step-label span {
+  color: #34d399;
+}
+
+.cluster-step-label small {
+  font-size: 9.5px;
+  color: #64748b;
+  line-height: 1.2;
+}
+
+.cluster-power-pill.starting {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.38);
+  color: #f59e0b;
+}
+
+.cluster-power-pill.starting .cluster-power-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
+  animation: pulseStartingDot 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseStartingDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+/* Persistent sticky top notification banner when cluster is booting */
+.cluster-starting-top-banner {
+  position: relative;
+  z-index: 95;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.14) 0%, rgba(14, 165, 233, 0.14) 100%);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.28);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+  transition: all var(--trans-fast);
+  animation: bannerSlideDown 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cluster-starting-top-banner:hover {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.22) 0%, rgba(14, 165, 233, 0.22) 100%);
+}
+
+@keyframes bannerSlideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.cluster-starting-banner-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: #f1f5f9;
+}
+
+.cluster-starting-beacon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+  animation: pulseStartingDot 1.2s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+.cluster-starting-msg {
+  font-weight: 550;
+  color: #f8fafc;
+}
+
+.cluster-starting-cta {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #38bdf8;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  margin-left: 6px;
+}
+
+/* Inline pills above composer */
+.home-cluster-starting-pill,
+.composer-cluster-starting-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  margin-bottom: 12px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.10);
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  color: #fbbf24;
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: all var(--trans-fast);
+  max-width: 100%;
+}
+
+.home-cluster-starting-pill:hover,
+.composer-cluster-starting-pill:hover {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.5);
+  transform: translateY(-1px);
+}
+
+.home-cluster-starting-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 7px #f59e0b;
+  animation: pulseStartingDot 1.2s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+.home-cluster-view-btn {
+  font-size: 11px;
+  font-weight: 650;
+  color: #38bdf8;
+  margin-left: 4px;
+}
+
+/* Focus glow on query input when system becomes ready */
+.floating-composer.input-pulse-ready,
+.composer-card.input-pulse-ready {
+  border-color: rgba(16, 185, 129, 0.8) !important;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25), 0 12px 36px rgba(16, 185, 129, 0.2) !important;
+  animation: readyPulseGlow 1.8s ease-out forwards;
+}
+
+@keyframes readyPulseGlow {
+  0% {
+    border-color: rgba(16, 185, 129, 0.9);
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.35), 0 12px 40px rgba(16, 185, 129, 0.25);
+  }
+  50% {
+    border-color: rgba(16, 185, 129, 0.6);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15), 0 8px 24px rgba(16, 185, 129, 0.15);
+  }
+  100% {
+    border-color: inherit;
+    box-shadow: inherit;
+  }
+}
+
+/* ==========================================================================
    LOGIN IMPROVEMENTS STYLES
    ========================================================================== */
 .login-quick-cards {

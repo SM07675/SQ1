@@ -140,28 +140,108 @@ export default function App() {
 
   // Cluster Scale-to-Zero State
   const [isWakeModalOpen, setIsWakeModalOpen] = useState(false);
-  const [clusterOnline, setClusterOnline] = useState(true);
+  const [clusterOnline, setClusterOnline] = useState(false);
+  const [clusterState, setClusterState] = useState<"online" | "starting" | "standby">("starting");
+  const [autoFocusTrigger, setAutoFocusTrigger] = useState(0);
+  const [pendingMessage, setPendingMessage] = useState<{
+    query: string;
+    pairType: string;
+    files: File[];
+  } | null>(null);
 
-  // Initial cluster health check
+  // Focus query input helper
+  const triggerFocusQueryInput = useCallback(() => {
+    setAutoFocusTrigger(Date.now());
+    setTimeout(() => {
+      const textarea = document.querySelector<HTMLTextAreaElement>("textarea.composer-textarea");
+      if (textarea) {
+        textarea.focus();
+        const parent = textarea.closest(".floating-composer, .composer-card");
+        if (parent) {
+          parent.classList.add("input-pulse-ready");
+          setTimeout(() => parent.classList.remove("input-pulse-ready"), 2400);
+        }
+      }
+    }, 120);
+  }, []);
+
+  const handleClusterReady = useCallback(() => {
+    setClusterOnline(true);
+    setClusterState("online");
+    setIsWakeModalOpen(false);
+    addToast("success", "🛰️ AI Node C3-16GB-578 is Online & Ready! Enter your query below.");
+    refreshRuns();
+    refreshChatsList();
+
+    // Auto-focus query input: "When starts, automatically user can enter the query"
+    triggerFocusQueryInput();
+
+    // If a query was pending while starting, execute it now!
+    if (pendingMessage) {
+      const msg = pendingMessage;
+      setPendingMessage(null);
+      handleSendMessage(msg.query, msg.pairType, msg.files);
+    }
+  }, [pendingMessage, triggerFocusQueryInput]);
+
+  // Initial cluster health check on arrival / page visit
   useEffect(() => {
     let active = true;
-    const checkCluster = async () => {
+    const checkClusterOnArrival = async () => {
       try {
-        const res = await fetch("/health", { signal: AbortSignal.timeout(3500) });
+        const res = await fetch("/health", { signal: AbortSignal.timeout(2600) });
         if (res.ok) {
-          if (active) setClusterOnline(true);
-        } else {
-          if (active) setClusterOnline(false);
+          const data = await res.json().catch(() => null);
+          if (data && (data.status === "ok" || data.environment || data.models)) {
+            if (active) {
+              setClusterOnline(true);
+              setClusterState("online");
+              setIsWakeModalOpen(false);
+              triggerFocusQueryInput();
+            }
+            return;
+          }
         }
       } catch {
-        if (active) setClusterOnline(false);
+        // Timeout or connection refused - node is asleep / booting
+      }
+
+      if (active) {
+        // Node is asleep / powered off / starting:
+        // Automatically show "Waiting for system to start..." modal and wake it
+        setClusterOnline(false);
+        setClusterState("starting");
+        setIsWakeModalOpen(true);
       }
     };
-    checkCluster();
+
+    checkClusterOnArrival();
     return () => {
       active = false;
     };
-  }, []);
+  }, [triggerFocusQueryInput]);
+
+  // Background watcher to detect when cluster becomes ready even if modal was dismissed
+  useEffect(() => {
+    if (clusterOnline) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch("/health", { signal: AbortSignal.timeout(2800) });
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data && (data.status === "ok" || data.environment || data.models)) {
+            clearInterval(interval);
+            handleClusterReady();
+          }
+        }
+      } catch {
+        // Still booting
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [clusterOnline, handleClusterReady]);
 
   // ── Auto-Shutdown Inactivity Watchdog (20 Minutes) ──────────────────────────
   // Automatically puts E2E node to sleep if no user activity for 20 minutes
@@ -170,9 +250,11 @@ export default function App() {
 
     const triggerAutoSleep = async () => {
       try {
+        if (!clusterOnline) return;
         console.log("[SatQuery Eco] 20 min idle timeout reached. Putting AI node to sleep...");
         await fetch("/e2e/sleep", { method: "POST" });
         setClusterOnline(false);
+        setClusterState("standby");
         addToast("info", "💤 SatQuery AI Node went to sleep to protect your cloud credits.");
       } catch (err) {
         console.warn("Auto-sleep error:", err);
@@ -201,7 +283,7 @@ export default function App() {
       window.removeEventListener("click", resetIdleTimer);
       window.removeEventListener("scroll", resetIdleTimer);
     };
-  }, []);
+  }, [clusterOnline]);
 
   const handleToggleClusterPower = async () => {
     if (clusterOnline) {
@@ -209,11 +291,13 @@ export default function App() {
         addToast("info", "Putting AI cluster to sleep to save credits...");
         await fetch("/e2e/sleep", { method: "POST" });
         setClusterOnline(false);
+        setClusterState("standby");
         addToast("success", "💤 AI Node is now in sleep mode (₹0 credit burn).");
       } catch (err) {
         addToast("error", "Failed to power down node: " + String(err));
       }
     } else {
+      setClusterState("starting");
       setIsWakeModalOpen(true);
     }
   };
@@ -408,6 +492,15 @@ export default function App() {
       (files.length === 2
         ? "Compare these two satellite images and find differences."
         : "Analyze this satellite imagery.");
+
+    if (!clusterOnline) {
+      setPendingMessage({ query: effectiveQuery, pairType, files });
+      setClusterState("starting");
+      setIsWakeModalOpen(true);
+      addToast("info", "AI Node is warming up. Query will run automatically once the node starts.");
+      return;
+    }
+
     let chatId = currentChatId;
 
     setBusy(true);
@@ -569,10 +662,30 @@ export default function App() {
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         clusterOnline={clusterOnline}
+        clusterState={clusterState}
         onToggleClusterPower={handleToggleClusterPower}
         authUser={authUser}
         onLogout={handleLogout}
       />
+
+      {/* Cluster starting sticky top banner (if user dismissed modal but node is booting) */}
+      {clusterState === "starting" && !isWakeModalOpen && (
+        <div
+          className="cluster-starting-top-banner"
+          onClick={() => setIsWakeModalOpen(true)}
+          role="button"
+          tabIndex={0}
+          title="Click to view live node startup progress"
+        >
+          <div className="cluster-starting-banner-inner">
+            <span className="cluster-starting-beacon" />
+            <span className="cluster-starting-msg">
+              Waiting for system to start... (E2E Node C3-16GB-578 · Loading PyTorch &amp; 11 Models)
+            </span>
+            <span className="cluster-starting-cta">View Live Progress &rarr;</span>
+          </div>
+        </div>
+      )}
 
       {/* 2. Floating Left Sidebar (transfers top navigation to left sidebar per design reference) */}
       <FloatingSidebar
@@ -628,6 +741,10 @@ export default function App() {
                 busy={busy}
                 recentChats={chats}
                 onSelectChat={selectChat}
+                clusterOnline={clusterOnline}
+                clusterState={clusterState}
+                autoFocusTrigger={autoFocusTrigger}
+                onOpenWakeModal={() => setIsWakeModalOpen(true)}
               />
             ) : (
               <>
@@ -653,6 +770,10 @@ export default function App() {
                   onSendMessage={handleSendMessage}
                   busy={busy}
                   activeContextImageName={activeContextImageName}
+                  clusterOnline={clusterOnline}
+                  clusterState={clusterState}
+                  autoFocusTrigger={autoFocusTrigger}
+                  onOpenWakeModal={() => setIsWakeModalOpen(true)}
                 />
               </>
             )}
@@ -737,12 +858,7 @@ export default function App() {
       <ClusterWakeModal
         isOpen={isWakeModalOpen}
         onClose={() => setIsWakeModalOpen(false)}
-        onClusterReady={() => {
-          setClusterOnline(true);
-          addToast("success", "AI Node C3-16GB-578 is Online and Ready!");
-          refreshRuns();
-          refreshChatsList();
-        }}
+        onClusterReady={handleClusterReady}
         onExploreDemo={() => {
           setActiveTab("explore");
           addToast("info", "Viewing interactive pre-computed satellite analyses.");

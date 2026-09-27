@@ -27,6 +27,7 @@ interface TopNavProps {
   onOpenCommandPalette: () => void;
   onOpenSettings: () => void;
   clusterOnline?: boolean;
+  clusterState?: "online" | "starting" | "standby";
   onToggleClusterPower?: () => void;
   authUser?: AuthUser | null;
   onLogout?: () => void;
@@ -43,6 +44,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   onOpenCommandPalette,
   onOpenSettings,
   clusterOnline = true,
+  clusterState = "online",
   onToggleClusterPower,
   authUser,
   onLogout,
@@ -196,16 +198,30 @@ export const TopNav: React.FC<TopNavProps> = ({
           <button
             type="button"
             onClick={onToggleClusterPower}
-            className={`cluster-power-pill ${clusterOnline ? "online" : "standby"}`}
+            className={`cluster-power-pill ${clusterState || (clusterOnline ? "online" : "standby")}`}
             title={
-              clusterOnline
+              clusterState === "starting"
+                ? "AI Node is Starting... (Click to view live progress)"
+                : clusterOnline
                 ? "Cluster is Online (Click to sleep & save credits)"
                 : "Cluster is in Standby (Click to wake up)"
             }
-            aria-label={clusterOnline ? "Cluster is Online" : "Cluster is in Standby"}
+            aria-label={
+              clusterState === "starting"
+                ? "Cluster is Starting"
+                : clusterOnline
+                ? "Cluster is Online"
+                : "Cluster is in Standby"
+            }
           >
             <span className="cluster-power-dot" />
-            <span>{clusterOnline ? "16GB Online" : "Standby"}</span>
+            <span>
+              {clusterState === "starting"
+                ? "Starting..."
+                : clusterOnline
+                ? "16GB Online"
+                : "Standby"}
+            </span>
           </button>
         )}
 

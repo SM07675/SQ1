@@ -55,7 +55,9 @@ models/**/*.tif
 models/**/*.tiff
 models/**/*.zip
 
-# OS files
+# OS & tool files
 .DS_Store
 Thumbs.db
+.vercel/
+**/.vercel/
 

@@ -25,7 +25,12 @@ export default async function handler(req, res) {
           'Accept': 'application/json'
         }
       });
-      const data = await r.json();
+      let data = {};
+      try {
+        data = await r.json();
+      } catch {
+        data = {};
+      }
       const node = (data.data || []).find(n => String(n.id) === NODE_ID) || data.data?.[0];
       return res.status(200).json({
         node_id: NODE_ID,
@@ -50,12 +55,17 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({ type: 'power_on' })
       });
-      const data = await r.json();
-      const isAlreadyRunning = data.errors && String(data.errors).includes('already in state');
+      let data = {};
+      try {
+        data = await r.json();
+      } catch {
+        data = {};
+      }
+      const isAlreadyRunning = data.errors && String(data.errors).toLowerCase().includes('already in state');
       return res.status(200).json({
         success: true,
         message: isAlreadyRunning ? 'Node is already running' : 'Power-on command sent successfully',
-        status: 'Starting',
+        status: isAlreadyRunning ? 'Running' : 'Starting',
         e2e_response: data
       });
     } catch (err) {
@@ -75,7 +85,12 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({ type: 'power_off' })
       });
-      const data = await r.json();
+      let data = {};
+      try {
+        data = await r.json();
+      } catch {
+        data = {};
+      }
       return res.status(200).json({
         success: true,
         message: 'Power-off command sent successfully',
