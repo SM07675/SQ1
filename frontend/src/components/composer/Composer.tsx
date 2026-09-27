@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Plus, ArrowUp, Paperclip, X, Image as ImageIcon, ImagePlus, CheckCircle2 } from "lucide-react";
 import { AttachmentTray, type AttachedFileItem } from "./AttachmentTray";
+import { convertTiffToDataUrl } from "../../utils/tiffViewer";
 
 interface ComposerProps {
   onSendMessage: (query: string, pairType: string, files: File[]) => Promise<void>;
@@ -85,6 +86,26 @@ export const Composer: React.FC<ComposerProps> = ({
           role: combinedFiles.length === 2 ? (idx === 0 ? "earlier" : "later") : "single",
         };
       });
+    });
+
+    // Generate instant client-side thumbnail for GeoTIFF rasters
+    incomingFiles.forEach((file) => {
+      const isGeotiff =
+        file.name.toLowerCase().endsWith(".tif") || file.name.toLowerCase().endsWith(".tiff");
+      if (isGeotiff) {
+        convertTiffToDataUrl(file, 256)
+          .then((dataUrl) => {
+            setAttachedFiles((prev) =>
+              prev.map((item) =>
+                item.file === file ||
+                (item.file.name === file.name && item.file.size === file.size)
+                  ? { ...item, previewUrl: dataUrl }
+                  : item
+              )
+            );
+          })
+          .catch((err) => console.warn("Failed to generate TIFF preview thumbnail:", err));
+      }
     });
   };
 

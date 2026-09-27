@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { AnalysisResponse } from "../../types";
 import { artifactUrl } from "../../api";
+import { getPreviewUrl } from "../../utils/tiffViewer";
 import { VisualResultCard } from "../results/VisualResultCard";
 import { KeyFindingsCard } from "../results/KeyFindingsCard";
 import { ReportCard } from "../results/ReportCard";
@@ -130,6 +131,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
               <div className="mini-evidence-gallery">
                 {previewEvidence.map((art, idx) => {
                   const fullUrl = artifactUrl(art.url) || "";
+                  const displayThumb = getPreviewUrl(fullUrl) || fullUrl;
                   const cleanName = art.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "");
                   return (
                     <div
@@ -138,7 +140,7 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
                       onClick={() => onOpenLightbox(fullUrl, cleanName)}
                       title="Click to expand evidence"
                     >
-                      <img src={fullUrl} alt={cleanName} loading="lazy" />
+                      <img src={displayThumb} alt={cleanName} loading="lazy" />
                       <span className="mini-evidence-label">{cleanName}</span>
                     </div>
                   );

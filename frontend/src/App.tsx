@@ -33,6 +33,7 @@ import { ReportViewerModal } from "./components/inspectors/ReportViewerModal";
 import { AnalysisInspector } from "./components/inspectors/AnalysisInspector";
 import { EvidenceDrawer } from "./components/inspectors/EvidenceDrawer";
 import { MapPanel } from "./components/inspectors/MapPanel";
+import { convertTiffToDataUrl, isTiffPath } from "./utils/tiffViewer";
 import { Toast, type ToastMessage } from "./components/shared/Toast";
 import { LiquidAuroraBackground } from "./components/shared/LiquidAuroraBackground";
 import { LoginPage, DEMO_ACCOUNTS, type AuthUser } from "./components/views/LoginPage";
@@ -433,13 +434,28 @@ export default function App() {
       }
     }
 
-    // Optimistically append user message to UI with real blob URLs for immediate preview!
+    // Optimistically append user message to UI with rendered previews for immediate display
     const tempUserMsgId = `temp-${Date.now()}`;
-    const previewAttachments = files.map((f) => ({
-      name: f.name,
-      url: URL.createObjectURL(f),
-      type: "image",
-    }));
+    const previewAttachments = await Promise.all(
+      files.map(async (f) => {
+        let previewUrl: string | undefined = undefined;
+        const isTiff = isTiffPath(f.name);
+        if (isTiff) {
+          try {
+            previewUrl = await convertTiffToDataUrl(f, 600);
+          } catch (err) {
+            console.warn("Could not generate client-side TIFF preview:", err);
+          }
+        }
+        const blobUrl = URL.createObjectURL(f);
+        return {
+          name: f.name,
+          url: previewUrl || blobUrl,
+          previewUrl,
+          type: "image",
+        };
+      })
+    );
 
     setCurrentChatDetail((prev) => {
       const baseDetail: ChatDetail =

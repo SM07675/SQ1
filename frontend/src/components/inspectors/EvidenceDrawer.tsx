@@ -2,6 +2,7 @@ import React from "react";
 import { X, Layers, Maximize2, Download } from "lucide-react";
 import type { AnalysisResponse } from "../../types";
 import { artifactUrl } from "../../api";
+import { getPreviewUrl } from "../../utils/tiffViewer";
 
 interface EvidenceDrawerProps {
   isOpen: boolean;
@@ -48,6 +49,7 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
           <div className="evidence-drawer-grid">
             {imageArtifacts.map((art, idx) => {
               const fullUrl = artifactUrl(art.url) || "";
+              const displayThumb = getPreviewUrl(fullUrl) || fullUrl;
               const cleanName = art.name.replace(/_/g, " ").replace(/\.[^/.]+$/, "");
 
               return (
@@ -56,7 +58,7 @@ export const EvidenceDrawer: React.FC<EvidenceDrawerProps> = ({
                     className="evidence-card-img-wrap"
                     onClick={() => onOpenLightbox(fullUrl, cleanName)}
                   >
-                    <img src={fullUrl} alt={cleanName} loading="lazy" />
+                    <img src={displayThumb} alt={cleanName} loading="lazy" />
                     <div className="evidence-card-overlay">
                       <Maximize2 size={16} />
                       <span>Maximize</span>

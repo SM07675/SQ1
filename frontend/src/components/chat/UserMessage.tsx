@@ -1,10 +1,18 @@
 import React, { useState } from "react";
-import { Copy, Check, Maximize2 } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 import { artifactUrl } from "../../api";
+import { TiffPreviewImage } from "../shared/TiffPreviewImage";
+import { isTiffPath, getPreviewUrl } from "../../utils/tiffViewer";
 
 interface UserMessageProps {
   content: string;
-  attachments?: Array<{ name: string; url: string; type: string }>;
+  attachments?: Array<{
+    name: string;
+    url: string;
+    preview_url?: string;
+    previewUrl?: string;
+    type: string;
+  }>;
   onOpenImage?: (url: string, title: string) => void;
 }
 
@@ -36,25 +44,31 @@ export const UserMessage: React.FC<UserMessageProps> = ({
         {attachments && attachments.length > 0 && (
           <div className="user-attachments-row">
             {attachments.map((att, idx) => {
-              const fullUrl = artifactUrl(att.url) || att.url;
-              const isImage = att.type === "image" || att.name.match(/\.(png|jpg|jpeg)$/i);
+              const preview = att.preview_url || att.previewUrl;
+              const isTiff = isTiffPath(att.name) || isTiffPath(att.url);
+              const isImage =
+                att.type === "image" ||
+                isTiff ||
+                Boolean(att.name.match(/\.(png|jpe?g|webp|gif|svg)$/i));
 
-              if (isImage && fullUrl) {
+              if (isImage) {
+                // Determine best URL for full resolution lightbox
+                const targetOpenUrl = preview || getPreviewUrl(att.url) || att.url;
+
                 return (
-                  <div
+                  <TiffPreviewImage
                     key={idx}
-                    className="user-attached-image-preview"
-                    onClick={() => onOpenImage && onOpenImage(fullUrl, att.name)}
-                    title="Click to view full image"
-                  >
-                    <img src={fullUrl} alt={att.name} loading="lazy" />
-                    <div className="maximize-overlay">
-                      <Maximize2 size={14} />
-                    </div>
-                  </div>
+                    src={att.url}
+                    alt={att.name}
+                    previewUrl={preview}
+                    onClick={() =>
+                      onOpenImage && onOpenImage(targetOpenUrl, att.name)
+                    }
+                  />
                 );
               }
 
+              const fullUrl = artifactUrl(att.url) || att.url;
               return (
                 <div
                   key={idx}

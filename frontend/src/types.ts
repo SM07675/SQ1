@@ -228,7 +228,7 @@ export interface ChatMessageRecord {
   role: "user" | "assistant" | "system";
   content: string;
   created_at: string;
-  attachments?: Array<{ name: string; url: string; type: string }>;
+  attachments?: Array<{ name: string; url: string; preview_url?: string; previewUrl?: string; type: string }>;
   result?: AnalysisResponse | null;
 }
 

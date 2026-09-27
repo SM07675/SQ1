@@ -1,0 +1,22 @@
+{
+  "validation": {
+    "instance_precision@0.5": 0.6638005159071367,
+    "instance_recall@0.5": 0.6575809199318569,
+    "instance_f1@0.5": 0.660676080445015,
+    "semantic_iou": 0.6473413401893839,
+    "matched_instance_iou": 0.6870611331551083,
+    "count_mae": 1.5125,
+    "count_relative_error": 0.1727013575195689,
+    "tiles": 80
+  },
+  "test": {
+    "instance_precision@0.5": 0.26899128268991285,
+    "instance_recall@0.5": 0.3847524047025294,
+    "instance_f1@0.5": 0.316622691292876,
+    "semantic_iou": 0.5640286791799946,
+    "matched_instance_iou": 0.703252234277682,
+    "count_mae": 13.616666666666667,
+    "count_relative_error": 0.6988038828705955,
+    "tiles": 120
+  }
+}

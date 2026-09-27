@@ -49,6 +49,18 @@ repository = Repository(settings.database_path)
 async def lifespan(_: FastAPI):
     settings.artifact_dir.mkdir(parents=True, exist_ok=True)
     repository.init()
+    try:
+        chats_dir = settings.artifact_dir / "chats"
+        if chats_dir.exists():
+            for tif in chats_dir.glob("*/*.tif"):
+                prev = tif.with_name(f"{tif.stem}_preview.png")
+                if not prev.exists():
+                    try:
+                        render_preview(tif, prev, max_size=1200)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
     yield
 
 
@@ -58,6 +70,28 @@ app = FastAPI(
     description="Evidence-first spectral, temporal and optical-SAR geospatial analysis for SIH26167.",
     lifespan=lifespan,
 )
+
+
+@app.get("/api/v1/preview")
+def get_raster_preview(path: str):
+    """Dynamically serve or render a web-compatible PNG preview for any TIFF/GeoTIFF raster."""
+    clean_path = path.lstrip("/").replace("artifacts/", "")
+    resolved = settings.artifact_dir / clean_path
+    if not resolved.exists():
+        resolved = Path(path)
+        if not resolved.exists():
+            raise HTTPException(404, "Raster file not found")
+
+    if resolved.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".svg"):
+        return FileResponse(resolved)
+
+    preview_file = resolved.with_name(f"{resolved.stem}_preview.png")
+    if not preview_file.exists():
+        try:
+            render_preview(resolved, preview_file, max_size=1200)
+        except Exception as exc:
+            raise HTTPException(500, f"Could not render preview: {exc}")
+    return FileResponse(preview_file, media_type="image/png")
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r".*",
@@ -395,7 +429,7 @@ def create_chat(req: ChatCreateRequest) -> ChatSummaryItem:
 def get_chat(chat_id: str) -> ChatDetailResponse:
     chat = repository.get_chat(chat_id)
     if chat is None:
-        chat = repository.create_chat(chat_id, "New Analysis")
+        raise HTTPException(status_code=404, detail=f"Chat '{chat_id}' not found")
 
     db_images = repository.get_chat_images(chat_id)
     images = [
@@ -510,20 +544,36 @@ async def post_chat_message(
         img_a_path = chat_dir / f"image_1{ext_a}"
         await _save_upload(image_a, img_a_path)
         img_a_url = f"/artifacts/chats/{chat_id}/image_1{ext_a}"
+        preview_a_url = img_a_url
+        if ext_a in (".tif", ".tiff"):
+            prev_a_path = chat_dir / "image_1_preview.png"
+            try:
+                render_preview(img_a_path, prev_a_path, max_size=1200)
+                preview_a_url = f"/artifacts/chats/{chat_id}/image_1_preview.png"
+            except Exception:
+                pass
         img_id_1 = str(uuid.uuid4())
         repository.add_chat_image(img_id_1, chat_id, image_a.filename or "image_1", img_a_path, img_a_url)
         stored_paths = [img_a_path]
-        user_msg_attachments.append({"name": image_a.filename, "url": img_a_url, "type": "image"})
+        user_msg_attachments.append({"name": image_a.filename, "url": img_a_url, "preview_url": preview_a_url, "type": "image"})
 
         if image_b is not None:
             ext_b = Path(image_b.filename or ".png").suffix.lower()
             img_b_path = chat_dir / f"image_2{ext_b}"
             await _save_upload(image_b, img_b_path)
             img_b_url = f"/artifacts/chats/{chat_id}/image_2{ext_b}"
+            preview_b_url = img_b_url
+            if ext_b in (".tif", ".tiff"):
+                prev_b_path = chat_dir / "image_2_preview.png"
+                try:
+                    render_preview(img_b_path, prev_b_path, max_size=1200)
+                    preview_b_url = f"/artifacts/chats/{chat_id}/image_2_preview.png"
+                except Exception:
+                    pass
             img_id_2 = str(uuid.uuid4())
             repository.add_chat_image(img_id_2, chat_id, image_b.filename or "image_2", img_b_path, img_b_url)
             stored_paths.append(img_b_path)
-            user_msg_attachments.append({"name": image_b.filename, "url": img_b_url, "type": "image"})
+            user_msg_attachments.append({"name": image_b.filename, "url": img_b_url, "preview_url": preview_b_url, "type": "image"})
 
         # Record user message
         user_msg_id = str(uuid.uuid4())
@@ -620,10 +670,18 @@ async def post_chat_message(
                 dest_p = chat_dir / f"image_{idx + 1}{ext}"
                 shutil.copyfile(src_p, dest_p)
                 img_url = f"/artifacts/chats/{chat_id}/image_{idx + 1}{ext}"
+                preview_url = img_url
+                if ext in (".tif", ".tiff"):
+                    prev_p = chat_dir / f"image_{idx + 1}_preview.png"
+                    try:
+                        render_preview(dest_p, prev_p, max_size=1200)
+                        preview_url = f"/artifacts/chats/{chat_id}/image_{idx + 1}_preview.png"
+                    except Exception:
+                        pass
                 img_id = str(uuid.uuid4())
                 repository.add_chat_image(img_id, chat_id, filename, dest_p, img_url)
                 stored_paths.append(dest_p)
-                user_msg_attachments.append({"name": filename, "url": img_url, "type": "image"})
+                user_msg_attachments.append({"name": filename, "url": img_url, "preview_url": preview_url, "type": "image"})
 
             user_msg_id = str(uuid.uuid4())
             repository.add_chat_message(user_msg_id, chat_id, "user", query, attachments=user_msg_attachments)

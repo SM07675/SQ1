@@ -2,12 +2,15 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   ZoomIn,
   ZoomOut,
-  RotateCcw,
   Maximize2,
   ExternalLink,
   Download,
   X,
+  Layers,
+  Loader2,
 } from "lucide-react";
+import { artifactUrl } from "../../api";
+import { isTiffPath, getPreviewUrl, convertTiffToDataUrl } from "../../utils/tiffViewer";
 
 interface ImageLightboxProps {
   isOpen: boolean;
@@ -27,12 +30,39 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
 
+  const isTiff = isTiffPath(imageUrl) || isTiffPath(imageTitle);
+  const [renderedSrc, setRenderedSrc] = useState<string>(() => {
+    if (!imageUrl) return "";
+    if (imageUrl.startsWith("data:") || imageUrl.startsWith("blob:")) return imageUrl;
+    return getPreviewUrl(imageUrl);
+  });
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
   useEffect(() => {
     if (isOpen) {
       setScale(1);
       setPosition({ x: 0, y: 0 });
+
+      if (imageUrl.startsWith("data:")) {
+        setRenderedSrc(imageUrl);
+        return;
+      }
+
+      if (imageUrl.startsWith("blob:") && isTiff) {
+        setIsLoading(true);
+        convertTiffToDataUrl(imageUrl)
+          .then((url) => {
+            setRenderedSrc(url);
+            setIsLoading(false);
+          })
+          .catch(() => setIsLoading(false));
+        return;
+      }
+
+      const preview = getPreviewUrl(imageUrl);
+      setRenderedSrc(preview);
     }
-  }, [isOpen, imageUrl]);
+  }, [isOpen, imageUrl, isTiff]);
 
   // Close on Escape key
   useEffect(() => {
@@ -84,7 +114,23 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
 
   const handleMouseUp = () => setIsDragging(false);
 
+  const handleImageError = async () => {
+    if (isTiff && !renderedSrc.startsWith("data:")) {
+      try {
+        setIsLoading(true);
+        const orig = artifactUrl(imageUrl) || imageUrl;
+        const dataUrl = await convertTiffToDataUrl(orig);
+        setRenderedSrc(dataUrl);
+        setIsLoading(false);
+      } catch (err) {
+        console.warn("Lightbox fallback TIFF render failed:", err);
+        setIsLoading(false);
+      }
+    }
+  };
+
   const cleanTitle = imageTitle.replace(/_/g, " ").replace(/\.[^/.]+$/, "");
+  const downloadUrl = artifactUrl(imageUrl) || imageUrl;
 
   return (
     <div className="lightbox-backdrop" onClick={onClose}>
@@ -93,7 +139,13 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
         <div className="lightbox-navbar">
           <div className="lightbox-title-group">
             <span className="lightbox-title">{cleanTitle}</span>
-            <span className="lightbox-tag">Full Resolution</span>
+            {isTiff ? (
+              <span className="lightbox-tag flex items-center gap-1">
+                <Layers size={11} className="text-cyan-400" /> GeoTIFF Raster
+              </span>
+            ) : (
+              <span className="lightbox-tag">Full Resolution</span>
+            )}
           </div>
 
           <div className="lightbox-controls-group">
@@ -136,20 +188,20 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
             <div className="lightbox-divider" />
 
             <a
-              href={imageUrl}
+              href={downloadUrl}
               target="_blank"
               rel="noreferrer"
               className="lightbox-tool-btn"
-              title="Open full resolution in new tab"
+              title="Open source file in new tab"
             >
               <ExternalLink size={16} />
             </a>
 
             <a
-              href={imageUrl}
-              download={`${imageTitle || "satellite_imagery"}.png`}
+              href={downloadUrl}
+              download={imageTitle || (isTiff ? "satellite_imagery.tif" : "satellite_imagery.png")}
               className="lightbox-tool-btn"
-              title="Download image"
+              title="Download original raster image"
             >
               <Download size={16} />
             </a>
@@ -175,11 +227,19 @@ export const ImageLightbox: React.FC<ImageLightboxProps> = ({
           onMouseLeave={handleMouseUp}
           style={{ cursor: scale > 1 ? (isDragging ? "grabbing" : "grab") : "default" }}
         >
+          {isLoading && (
+            <div className="tiff-loading-overlay">
+              <Loader2 size={24} className="animate-spin text-cyan-400" />
+              <span className="text-xs text-cyan-200 mt-2 font-medium">Decoding full GeoTIFF raster…</span>
+            </div>
+          )}
+
           <img
-            src={imageUrl}
+            src={renderedSrc}
             alt={cleanTitle}
             className="lightbox-target-img"
             draggable={false}
+            onError={handleImageError}
             style={{
               transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
               transition: isDragging ? "none" : "transform 0.15s ease-out",

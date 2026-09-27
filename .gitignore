@@ -38,6 +38,7 @@ backend/artifacts/*
 *.db
 backend/temp_test*
 backend/test_out*
+backend/scratch/
 backend/*.png
 out_tmp/
 *.tmp.png

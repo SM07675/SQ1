@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -415,18 +416,23 @@ class Repository:
                 "SELECT * FROM chat_messages WHERE chat_id=? ORDER BY created_at ASC",
                 (chat_id,),
             ).fetchall()
-        return [
-            {
+        messages: list[dict[str, Any]] = []
+        for r in rows:
+            attachments = json.loads(r["attachments_json"])
+            for att in attachments:
+                url = att.get("url", "")
+                if url and re.search(r"\.(tif|tiff)$", url, re.IGNORECASE) and not att.get("preview_url"):
+                    att["preview_url"] = re.sub(r"\.(tif|tiff)$", "_preview.png", url, flags=re.IGNORECASE)
+            messages.append({
                 "message_id": r["message_id"],
                 "chat_id": r["chat_id"],
                 "role": r["role"],
                 "content": r["content"],
                 "created_at": r["created_at"],
-                "attachments": json.loads(r["attachments_json"]),
+                "attachments": attachments,
                 "result": json.loads(r["result_json"]) if r["result_json"] else None,
-            }
-            for r in rows
-        ]
+            })
+        return messages
 
     def add_chat_image(
         self,

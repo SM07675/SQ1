@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { AnalysisResponse } from "../../types";
 import { artifactUrl } from "../../api";
+import { getPreviewUrl } from "../../utils/tiffViewer";
 
 interface AnalysisInspectorProps {
   isOpen: boolean;
@@ -174,7 +175,7 @@ export const AnalysisInspector: React.FC<AnalysisInspectorProps> = ({
                             className="evidence-thumb-container"
                             onClick={() => onOpenImage && onOpenImage(fullUrl, item.kind)}
                           >
-                            <img src={fullUrl} alt={item.kind} loading="lazy" />
+                            <img src={getPreviewUrl(fullUrl) || fullUrl} alt={item.kind} loading="lazy" />
                             <span className="thumb-hover-label">Click to zoom</span>
                           </div>
                         )}

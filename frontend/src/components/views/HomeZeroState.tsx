@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { ChatSummary } from "../../types";
 import { AttachmentTray, type AttachedFileItem } from "../composer/AttachmentTray";
+import { convertTiffToDataUrl } from "../../utils/tiffViewer";
 
 interface HomeZeroStateProps {
   onSendMessage: (query: string, pairType: string, files: File[]) => Promise<void>;
@@ -62,6 +63,26 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
         };
       });
     });
+
+    // Generate instant client-side thumbnail for GeoTIFF rasters
+    incomingFiles.forEach((file) => {
+      const isGeotiff =
+        file.name.toLowerCase().endsWith(".tif") || file.name.toLowerCase().endsWith(".tiff");
+      if (isGeotiff) {
+        convertTiffToDataUrl(file, 256)
+          .then((dataUrl) => {
+            setAttachedFiles((prev) =>
+              prev.map((item) =>
+                item.file === file ||
+                (item.file.name === file.name && item.file.size === file.size)
+                  ? { ...item, previewUrl: dataUrl }
+                  : item
+              )
+            );
+          })
+          .catch((err) => console.warn("Failed to generate TIFF preview thumbnail:", err));
+      }
+    });
   };
 
   const loadDemoScene = async (type: "single" | "bitemporal" = "single") => {
@@ -75,9 +96,14 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
         const blobB = await resB.blob();
         const fileB = new File([blobB], "demo_after.tif", { type: "image/tiff" });
 
+        const [previewA, previewB] = await Promise.all([
+          convertTiffToDataUrl(fileA, 256).catch(() => undefined),
+          convertTiffToDataUrl(fileB, 256).catch(() => undefined),
+        ]);
+
         setAttachedFiles([
-          { file: fileA, isGeotiff: true, role: "earlier" },
-          { file: fileB, isGeotiff: true, role: "later" },
+          { file: fileA, isGeotiff: true, previewUrl: previewA, role: "earlier" },
+          { file: fileB, isGeotiff: true, previewUrl: previewB, role: "later" },
         ]);
         setQuery("Compare these two satellite images and find differences.");
       } else {
