@@ -168,6 +168,61 @@ export default function App() {
     };
   }, []);
 
+  // ── Auto-Shutdown Inactivity Watchdog (20 Minutes) ──────────────────────────
+  // Automatically puts E2E node to sleep if no user activity for 20 minutes
+  useEffect(() => {
+    let idleTimer: any = null;
+
+    const triggerAutoSleep = async () => {
+      try {
+        console.log("[SatQuery Eco] 20 min idle timeout reached. Putting AI node to sleep...");
+        await fetch("/e2e/sleep", { method: "POST" });
+        setClusterOnline(false);
+        addToast("info", "💤 SatQuery AI Node went to sleep to protect your cloud credits.");
+      } catch (err) {
+        console.warn("Auto-sleep error:", err);
+      }
+    };
+
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      // 20 minutes = 1,200,000 ms
+      idleTimer = setTimeout(() => {
+        triggerAutoSleep();
+      }, 20 * 60 * 1000);
+    };
+
+    window.addEventListener("mousemove", resetIdleTimer, { passive: true });
+    window.addEventListener("keydown", resetIdleTimer, { passive: true });
+    window.addEventListener("click", resetIdleTimer, { passive: true });
+    window.addEventListener("scroll", resetIdleTimer, { passive: true });
+
+    resetIdleTimer();
+
+    return () => {
+      clearTimeout(idleTimer);
+      window.removeEventListener("mousemove", resetIdleTimer);
+      window.removeEventListener("keydown", resetIdleTimer);
+      window.removeEventListener("click", resetIdleTimer);
+      window.removeEventListener("scroll", resetIdleTimer);
+    };
+  }, []);
+
+  const handleToggleClusterPower = async () => {
+    if (clusterOnline) {
+      try {
+        addToast("info", "Putting AI cluster to sleep to save credits...");
+        await fetch("/e2e/sleep", { method: "POST" });
+        setClusterOnline(false);
+        addToast("success", "💤 AI Node is now in sleep mode (₹0 credit burn).");
+      } catch (err) {
+        addToast("error", "Failed to power down node: " + String(err));
+      }
+    } else {
+      setIsWakeModalOpen(true);
+    }
+  };
+
   useEffect(() => {
     currentChatIdRef.current = currentChatId;
   }, [currentChatId]);
@@ -503,6 +558,8 @@ export default function App() {
         onToggleTheme={toggleTheme}
         onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        clusterOnline={clusterOnline}
+        onToggleClusterPower={handleToggleClusterPower}
       />
 
       {/* 2. Floating Left Sidebar (transfers top navigation to left sidebar per design reference) */}

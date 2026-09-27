@@ -22,6 +22,8 @@ interface TopNavProps {
   onToggleTheme: () => void;
   onOpenCommandPalette: () => void;
   onOpenSettings: () => void;
+  clusterOnline?: boolean;
+  onToggleClusterPower?: () => void;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
@@ -34,6 +36,8 @@ export const TopNav: React.FC<TopNavProps> = ({
   onToggleTheme,
   onOpenCommandPalette,
   onOpenSettings,
+  clusterOnline = true,
+  onToggleClusterPower,
 }) => {
   return (
     <header className={`satquery-topnav ${isHistoryOpen ? "sidebar-open" : ""}`} role="banner">
@@ -175,6 +179,28 @@ export const TopNav: React.FC<TopNavProps> = ({
         >
           <PanelLeft size={18} />
         </button>
+
+        {/* E2E Cluster Power Controller */}
+        {onToggleClusterPower && (
+          <button
+            type="button"
+            onClick={onToggleClusterPower}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border transition cursor-pointer ${
+              clusterOnline
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20"
+                : "bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20"
+            }`}
+            title={clusterOnline ? "Cluster is Online (Click to sleep & save credits)" : "Cluster is in Standby (Click to wake up)"}
+            style={{ fontSize: "11px", height: "28px" }}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                clusterOnline ? "bg-emerald-400 animate-pulse" : "bg-amber-400"
+              }`}
+            />
+            <span>{clusterOnline ? "16GB Online" : "Standby"}</span>
+          </button>
+        )}
 
         <div
           className="user-profile-badge"
