@@ -4,6 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/e2e/:action", "destination": "/api/e2e?action=:action" },
     { "source": "/api/:path*", "destination": "http://151.185.58.96/api/:path*" },
     { "source": "/health", "destination": "http://151.185.58.96/health" },
     { "source": "/artifacts/:path*", "destination": "http://151.185.58.96/artifacts/:path*" },

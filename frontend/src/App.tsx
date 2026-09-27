@@ -36,6 +36,7 @@ import { MapPanel } from "./components/inspectors/MapPanel";
 import { Toast, type ToastMessage } from "./components/shared/Toast";
 import { LiquidAuroraBackground } from "./components/shared/LiquidAuroraBackground";
 import { LoginPage, DEMO_ACCOUNTS, type AuthUser } from "./components/views/LoginPage";
+import { ClusterWakeModal } from "./components/shared/ClusterWakeModal";
 
 const PINNED_STORAGE_KEY = "satquery_pinned_chats";
 const ARCHIVED_STORAGE_KEY = "satquery_archived_chats";
@@ -135,6 +136,37 @@ export default function App() {
   const initialLoadRef = useRef(false);
   const currentChatIdRef = useRef<string | null>(null);
   const suppressHashChangeRef = useRef(false);
+
+  // Cluster Scale-to-Zero State
+  const [isWakeModalOpen, setIsWakeModalOpen] = useState(false);
+  const [clusterOnline, setClusterOnline] = useState(true);
+
+  // Initial cluster health check
+  useEffect(() => {
+    let active = true;
+    const checkCluster = async () => {
+      try {
+        const res = await fetch("/health", { signal: AbortSignal.timeout(3500) });
+        if (res.ok) {
+          if (active) setClusterOnline(true);
+        } else {
+          if (active) {
+            setClusterOnline(false);
+            setIsWakeModalOpen(true);
+          }
+        }
+      } catch {
+        if (active) {
+          setClusterOnline(false);
+          setIsWakeModalOpen(true);
+        }
+      }
+    };
+    checkCluster();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     currentChatIdRef.current = currentChatId;
@@ -631,6 +663,21 @@ export default function App() {
         theme={theme}
         onToggleTheme={toggleTheme}
         onOpenSettings={() => setIsSettingsOpen(true)}
+      />
+
+      <ClusterWakeModal
+        isOpen={isWakeModalOpen}
+        onClose={() => setIsWakeModalOpen(false)}
+        onClusterReady={() => {
+          setClusterOnline(true);
+          addToast("success", "AI Node C3-16GB-578 is Online and Ready!");
+          refreshRuns();
+          refreshChatsList();
+        }}
+        onExploreDemo={() => {
+          setActiveTab("explore");
+          addToast("info", "Viewing interactive pre-computed satellite analyses.");
+        }}
       />
 
       {/* 5. Toast Notifications */}
