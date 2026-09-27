@@ -37,7 +37,7 @@ In the Cloud Shell terminal, paste and run these commands:
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/SM07675/SatQuery.git satquery
+git clone https://github.com/SM07675/SQ1.git satquery
 cd satquery
 
 # 2. Make deployment script executable and run
