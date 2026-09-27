@@ -2,6 +2,7 @@ backend/
 artifacts/
 models/
 data/
+deployment/
 venv/
 .venv/
 .pytest_cache/
@@ -11,3 +12,9 @@ infra/
 docs/
 scratch/
 out_tmp/
+scripts/
+*.tar.gz
+*.zip
+*.pt
+*.bin
+*.onnx
