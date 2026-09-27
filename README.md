@@ -65,7 +65,7 @@ Every analysis generates a verifiable **SatQuery GeoProof™ Investigation Repor
 
 Watch the complete SatQuery AI project demonstration covering the problem, solution, architecture, workflow and prototype:
 * **Interactive Local Demonstration:** Evaluators can run the fully functional system locally on Windows or Linux with a single command (`scripts/run_windows.ps1` or `bash scripts/run_unix.sh`), complete with pre-packaged synthetic Sentinel-1/2 multispectral GeoTIFF pairs generated via `python scripts/make_demo_data.py`.
-* **Live Web Dashboard:** Deployed on Vercel Edge (`https://satquery.vercel.app`) with backend containerized on E2E Networks Cloud.
+* **Live Web Dashboard:** Deployed on Vercel Edge (`https://frontend-chi-mauve-51.vercel.app/`) with backend containerized on E2E Networks Cloud.
 * **Reproduction Steps:** Detailed commands to reproduce all 58 automated tests, benchmark evaluations, and demo workflows are provided in the [Installation and Local Setup](#-installation-and-local-setup) section below.
 
 ---
@@ -636,7 +636,7 @@ cp .env.example .env
 
 | Variable Name | Default Value | Description |
 | :--- | :--- | :--- |
-| `SATQUERY_CORS_ORIGINS` | `*` | Allowed CORS origins (e.g. `http://localhost:5173,https://satquery.vercel.app`). |
+| `SATQUERY_CORS_ORIGINS` | `*` | Allowed CORS origins (e.g. `http://localhost:5173,https://frontend-chi-mauve-51.vercel.app`). |
 | `SATQUERY_EARTHDIAL_ENDPOINT` | *(empty)* | Optional endpoint URL for external EarthDial-4B inference server (e.g. `http://localhost:9001`). |
 | `SATQUERY_CROMA_ENDPOINT` | *(empty)* | Optional endpoint URL for CROMA Optical-SAR cross-attention service (e.g. `http://localhost:9002`). |
 | `SATQUERY_CHANGE_ENDPOINT` | *(empty)* | Optional endpoint URL for external TinyCD/Open-CD change detection microservice (e.g. `http://localhost:9003`). |
@@ -659,7 +659,7 @@ SatQuery AI's production architecture is deployed and verified across modern clo
  ┌────────────────────────────────────────────────────────┐
  │                   Frontend Client                      │
  │    (Vercel Edge Network or Local Vite React UI)        │
- │              https://satquery.vercel.app               │
+ │        https://frontend-chi-mauve-51.vercel.app        │
  └───────────────────────────┬────────────────────────────┘
                              │
                              │ HTTPS / Vercel Edge Proxy Rewrites (/api/*, /artifacts/*)
@@ -684,7 +684,7 @@ SatQuery AI's production architecture is deployed and verified across modern clo
  └────────────────────────────────────────────────────────┘
 ```
 
-* **Frontend:** Deployed to **Vercel Edge Network** (`https://satquery.vercel.app`). `vercel.json` automatically proxies `/api/*`, `/health`, and `/artifacts/*` directly to the backend compute node over HTTPS.
+* **Frontend:** Deployed to **Vercel Edge Network** (`https://frontend-chi-mauve-51.vercel.app/`). `vercel.json` automatically proxies `/api/*`, `/health`, and `/artifacts/*` directly to the backend compute node over HTTPS.
 * **Backend:** Deployed to **E2E Networks Cloud** on an Ubuntu Linux Compute Node (recommended: `C3.8GB`, 4 vCPU, 8 GB RAM) running the containerized `satquery-backend` via `Dockerfile.e2e` and `docker-compose.e2e.yml`.
 * **1-Click E2E Deployment Script:** Evaluators can deploy to a fresh E2E Networks Linux instance using:
   ```powershell
@@ -754,7 +754,7 @@ SatQuery AI directly supports the United Nations 2030 Agenda for Sustainable Dev
 ## 🔗 Important Links
 
 * **GitHub Repository:** [https://github.com/SM07675/SQ1](https://github.com/SM07675/SQ1)
-* **Live Web Dashboard:** [https://satquery.vercel.app](https://satquery.vercel.app)
+* **Live Web Dashboard:** [https://frontend-chi-mauve-51.vercel.app/](https://frontend-chi-mauve-51.vercel.app/)
 * **Local Swagger API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 * **Complete System Architecture:** [ARCHITECTURE.md](ARCHITECTURE.md)
 * **Remote-Sensing Adaptation Report:** [REMOTE_SENSING_ADAPTATION.md](REMOTE_SENSING_ADAPTATION.md)
