@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+**/node_modules
+frontend
+.venv*
+backend/.venv*
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+artifacts
+backend/artifacts
+out_tmp
+*.tmp.png
+urban_coastal_tmp.png
+satquery_models*.zip
