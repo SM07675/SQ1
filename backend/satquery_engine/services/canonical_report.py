@@ -56,6 +56,7 @@ _FRIENDLY_METRIC_NAMES = {
     "land_percent": "Classified Land Coverage (%)",
     "unknown_percent": "Unclassified Coverage (%)",
     "possible_land_percent": "Possible Land Upper Bound (%)",
+    "water_percent": "Estimated Water Coverage (%)",
     "vegetation_percent": "Green/Vegetation (%)",
     "built_up_percent": "Built-up Area (%)",
 }
@@ -227,7 +228,7 @@ def write_pdf_report(output_dir: Path, payload):
     story.append(Spacer(1, 6))
 
     keys = {"count", "count_state", "area_m2", "selected_pixels", "region_count", "coverage_percent",
-            "valid_pixels", "land_pixels", "land_percent", "unknown_pixels", "unknown_percent", "possible_land_percent",
+            "valid_pixels", "land_pixels", "land_percent", "unknown_pixels", "unknown_percent", "possible_land_percent", "water_percent",
             "before_count", "after_count", "persistent_count",
             "possible_new_count", "possible_removed_count", "net_count_change",
             "net_footprint_area_m2", "changed_pixels", "changed_percent", "total_pixels",
@@ -235,9 +236,10 @@ def write_pdf_report(output_dir: Path, payload):
 
     for name, stats in payload.get("statistics", {}).items():
         heading(name.replace("_", " ").title())
+        visible_keys = keys - {"selected_pixels", "coverage_percent", "area_m2"} if name == "land_cover" else keys
         table([
             (_friendly_metric(k), format(v, ".2f") if isinstance(v, float) else str(v))
-            for k, v in stats.items() if k in keys
+            for k, v in stats.items() if k in visible_keys
         ])
         if stats.get("breakdown"):
             heading("Land Cover Breakdown")
@@ -245,7 +247,7 @@ def write_pdf_report(output_dir: Path, payload):
                 (_friendly_class(name),
                  f'{values["percent"]:.2f}% of valid pixels ({values["pixels"]:,} pixels)' +
                  (f' — about {values["area_m2"]:,.0f} square metres' if values.get("area_m2") is not None else ''))
-                for name, values in stats["breakdown"].items()
+                for name, values in stats["breakdown"].items() if values.get("pixels", 0) > 0
             ])
     if not payload.get("statistics"):
         story.append(p("No measurements were produced for this analysis."))
