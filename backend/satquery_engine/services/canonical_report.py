@@ -83,8 +83,10 @@ def _friendly_class(name):
     return _FRIENDLY_CLASS_NAMES.get(name, name.replace("_", " ").title())
 
 
-def _confidence_explanation(score):
+def _confidence_explanation(score, kind=None):
     """Convert a numeric confidence score to a human-friendly explanation."""
+    if kind == "uncalibrated_evidence_strength":
+        return f"Evidence strength {score:.2f} (uncalibrated); this is not an accuracy probability."
     if score >= 0.8:
         return f"{score:.1%} — High confidence. The analysis is well-supported by the image data."
     elif score >= 0.5:
@@ -178,7 +180,7 @@ def write_pdf_report(output_dir: Path, payload):
     story.append(Spacer(1, 8))
 
     friendly_status = _FRIENDLY_STATUS.get(verdict["status"], verdict["status"].replace("_", " ").title())
-    conf_text = _confidence_explanation(verdict["confidence"])
+    conf_text = _confidence_explanation(verdict["confidence"], verdict.get("confidence_kind"))
 
     table([
         ("Result Status", friendly_status),
@@ -201,9 +203,9 @@ def write_pdf_report(output_dir: Path, payload):
     ))
     story.append(Spacer(1, 8))
     if overlays:
-        visual(overlays[-1] if any("building_match" in a["url"] for a in overlays) else overlays[0])
+        visual(overlays[-1] if any("building_match" in a["url"] for a in overlays) else overlays[0], height=390)
     elif previews:
-        visual(previews[0])
+        visual(previews[0], height=390)
         story.append(p("Original image shown. No detection overlay was produced for this analysis."))
     else:
         story.append(p("No image artifact was available for this request."))
@@ -216,7 +218,7 @@ def write_pdf_report(output_dir: Path, payload):
         ("Dark Green", "Forest and woodland"),
         ("Warm Red", "Buildings and structures"),
         ("Bright Yellow", "Roads"),
-        ("Dark Yellow/Sandy", "Unclassified land"),
+        ("Dark Yellow/Sandy", "Unclassified area"),
         ("Tan/Brown", "Bare soil"),
         ("Light Olive", "Agricultural fields"),
     ]
