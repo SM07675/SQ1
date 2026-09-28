@@ -8291,7 +8291,8 @@ body {
   border: 1px solid rgba(15, 23, 42, 0.08);
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
   flex-shrink: 0;
-  max-width: 240px;
+  min-width: 245px;
+  max-width: 310px;
 }
 
 [data-theme="dark"] .attachment-chip {
@@ -8301,8 +8302,8 @@ body {
 }
 
 .chip-thumbnail-wrap {
-  width: 38px;
-  height: 38px;
+  width: 72px;
+  height: 72px;
   border-radius: 8px;
   overflow: hidden;
   background: rgba(15, 23, 42, 0.05);
@@ -8316,7 +8317,7 @@ body {
 .chip-thumbnail {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .chip-fallback-icon {
