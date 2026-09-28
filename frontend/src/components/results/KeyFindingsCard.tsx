@@ -1,16 +1,5 @@
 import React from "react";
-import {
-  Clock,
-  Leaf,
-  Building2,
-  Droplets,
-  TrendingUp,
-  Layers,
-  MapPin,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-} from "lucide-react";
+import { Clock, Leaf, Building2, Droplets, TrendingUp, Layers, MapPin, Info } from "lucide-react";
 import type { AnalysisResponse } from "../../types";
 
 interface KeyFindingsCardProps {
@@ -24,305 +13,83 @@ interface FindingRow {
   label: string;
   value: string;
   confidence: string;
-  confClass: string;
 }
 
-export const KeyFindingsCard: React.FC<KeyFindingsCardProps> = ({
-  result,
-  onOpenEvidence,
-}) => {
-  const { verdict, evidence, statistics, summary, timings } = result;
+const metric = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
 
-  // Calculate analysis latency
-  let latencyStr = "12s";
-  if (timings) {
-    const totalMs = Object.values(timings).reduce((acc, v) => acc + (typeof v === "number" ? v : 0), 0);
-    if (totalMs > 0) {
-      latencyStr = `${(totalMs / 1000).toFixed(1)}s`;
-    }
-  } else if (result.trace && result.trace.length > 0) {
-    const totalMs = result.trace.reduce((acc, t) => acc + (t.duration_ms || 0), 0);
-    if (totalMs > 0) {
-      latencyStr = `${(totalMs / 1000).toFixed(1)}s`;
-    }
-  }
-
-  const queryLower = (result.query || "").toLowerCase();
-  const taskName = (result.task_plan?.task || "").toLowerCase();
-  const overallConf = Math.round((verdict?.confidence ?? 0.88) * 100);
-
+export const KeyFindingsCard: React.FC<KeyFindingsCardProps> = ({ result, onOpenEvidence }) => {
+  const stats = result.statistics || {};
+  const evidence = result.evidence || [];
+  const fromEvidence = (...kinds: string[]) =>
+    (evidence.find((item) => kinds.includes(item.kind))?.metrics || {}) as Record<string, unknown>;
+  const change = (stats.change || fromEvidence("change", "baseline_change_detection")) as Record<string, unknown>;
+  const buildingChange = (stats.building_match || fromEvidence("building_match")) as Record<string, unknown>;
+  const land = (stats.land_cover || fromEvidence("land_cover", "land_cover_classification")) as Record<string, unknown>;
+  const water = (stats.water_measure || fromEvidence("spectral", "water_grounding_evidence")) as Record<string, unknown>;
+  const building = (stats.buildings_a || stats.building_detection || fromEvidence("buildings", "building_detection_evidence")) as Record<string, unknown>;
   const rows: FindingRow[] = [];
+  const add = (icon: React.ReactNode, iconClass: string, label: string, value: string, confidence = "Estimated") => {
+    rows.push({ icon, iconClass, label, value, confidence });
+  };
 
-  // 1. Check if bi-temporal or change query
-  const isChange =
-    taskName === "bi_temporal_change" ||
-    queryLower.includes("change") ||
-    result.artifacts.some((a) => a.name.includes("change"));
-
-  // Check statistics or evidence
-  const waterStats = statistics?.water_measure as Record<string, any> | undefined;
-  const landStats = statistics?.land_cover as Record<string, any> | undefined;
-  const buildingStats = statistics?.building_detection as Record<string, any> | undefined;
-
-  const changeEv = evidence.find((e) =>
-    ["baseline_change_detection", "learned_change_witness"].includes(e.kind)
-  );
-  const buildingEv = evidence.find((e) =>
-    e.kind.includes("building") || e.kind.includes("footprint")
-  );
-  const waterEv = evidence.find((e) => e.kind.includes("water"));
-  const landEv = evidence.find((e) => e.kind.includes("land"));
-
-  if (isChange) {
-    // Bi-temporal change metrics matching screenshot
-    const changeM = (changeEv?.metrics || {}) as Record<string, any>;
-    const changedPct = changeM.changed_percent != null ? Number(changeM.changed_percent) : 28.4;
-    const buildingCount = Number(buildingEv?.metrics?.count || buildingStats?.count || 342);
-    const waterChg = Number(waterStats?.coverage_percent || 12.6);
-
-    rows.push({
-      icon: <Leaf size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-leaf",
-      label: "Vegetation decrease",
-      value: `-${Math.abs(changedPct).toFixed(1)}%`,
-      confidence: "92% conf.",
-      confClass: "badge-teal",
-    });
-
-    rows.push({
-      icon: <Building2 size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-building",
-      label: "New buildings",
-      value: `+${buildingCount}`,
-      confidence: "87% conf.",
-      confClass: "badge-blue",
-    });
-
-    rows.push({
-      icon: <Droplets size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-water",
-      label: "Water expansion",
-      value: `+${Math.abs(waterChg).toFixed(1)}%`,
-      confidence: "85% conf.",
-      confClass: "badge-purple",
-    });
-
-    rows.push({
-      icon: <TrendingUp size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-trend",
-      label: "Overall change",
-      value: changedPct > 20 ? "High" : changedPct > 10 ? "Moderate" : "Low",
-      confidence: `${overallConf}% conf.`,
-      confClass: "badge-peach",
-    });
-  } else if (taskName === "land_cover" || landEv || landStats) {
-    // Land cover breakdown
-    const m = (landEv?.metrics || landStats || {}) as Record<string, any>;
-    const breakdown = (m.breakdown || {}) as Record<string, any>;
-
-    const vegPct = m.vegetation_percent != null
-      ? Number(m.vegetation_percent)
-      : (breakdown.vegetation?.percent != null || breakdown.woodland?.percent != null)
-        ? Number(breakdown.vegetation?.percent || 0) + Number(breakdown.woodland?.percent || 0)
-        : 29.6;
-
-    const builtPct = m.built_up_percent != null
-      ? Number(m.built_up_percent)
-      : breakdown.built_up?.percent != null
-        ? Number(breakdown.built_up.percent)
-        : 22.5;
-
-    const waterPct = m.water_percent != null
-      ? Number(m.water_percent)
-      : breakdown.water?.percent != null
-        ? Number(breakdown.water.percent)
-        : 14.1;
-
-    // Real individual class confidences
-    const vegConf = Math.round(
-      Number(breakdown.vegetation?.confidence ?? breakdown.woodland?.confidence ?? 0.94) * 100
-    );
-    const builtConf = Math.round(
-      Number(breakdown.built_up?.confidence ?? 0.91) * 100
-    );
-    const waterConf = Math.round(
-      Number(breakdown.water?.confidence ?? 0.89) * 100
-    );
-
-    // Determine mathematically accurate dominant class based on actual percentages
-    const candidates = [
-      { label: "Vegetation", pct: vegPct, conf: vegConf },
-      { label: "Built-up", pct: builtPct, conf: builtConf },
-      { label: "Water", pct: waterPct, conf: waterConf },
-    ];
-    if (breakdown.bare_pervious?.percent != null && Number(breakdown.bare_pervious.percent) > 0) {
-      candidates.push({
-        label: "Bare soil",
-        pct: Number(breakdown.bare_pervious.percent),
-        conf: Math.round(Number(breakdown.bare_pervious.confidence ?? 0.88) * 100),
-      });
-    }
-    if (breakdown.agriculture?.percent != null && Number(breakdown.agriculture.percent) > 0) {
-      candidates.push({
-        label: "Agriculture",
-        pct: Number(breakdown.agriculture.percent),
-        conf: Math.round(Number(breakdown.agriculture.confidence ?? 0.88) * 100),
-      });
-    }
-
-    const dominantItem = candidates.reduce(
-      (maxItem, curr) => (curr.pct > maxItem.pct ? curr : maxItem),
-      candidates[0]
-    );
-
-    rows.push({
-      icon: <Leaf size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-leaf",
-      label: "Vegetation cover",
-      value: `${vegPct.toFixed(1)}%`,
-      confidence: `${vegConf}% conf.`,
-      confClass: "badge-teal",
-    });
-
-    rows.push({
-      icon: <Building2 size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-building",
-      label: "Built-up terrain",
-      value: `${builtPct.toFixed(1)}%`,
-      confidence: `${builtConf}% conf.`,
-      confClass: "badge-blue",
-    });
-
-    rows.push({
-      icon: <Droplets size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-water",
-      label: "Water surfaces",
-      value: `${waterPct.toFixed(1)}%`,
-      confidence: `${waterConf}% conf.`,
-      confClass: "badge-purple",
-    });
-
-    rows.push({
-      icon: <Layers size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-trend",
-      label: "Dominant Class",
-      value: dominantItem.label,
-      confidence: `${dominantItem.conf}% conf.`,
-      confClass: "badge-peach",
-    });
-  } else if (taskName.includes("water") || waterEv || waterStats) {
-    // Water ground metrics
-    const m = (waterEv?.metrics || waterStats || {}) as Record<string, any>;
-    const cov = Number(m.total_coverage_percent ?? m.coverage_percent ?? 18.4);
-    const count = Number(m.region_count ?? 3);
-    const deepPct = Number(m.deep_water_percent ?? 72);
-
-    rows.push({
-      icon: <Droplets size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-water",
-      label: "Water coverage",
-      value: `${cov.toFixed(1)}%`,
-      confidence: "95% conf.",
-      confClass: "badge-teal",
-    });
-
-    rows.push({
-      icon: <MapPin size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-trend",
-      label: "Water bodies",
-      value: `${count} detected`,
-      confidence: "91% conf.",
-      confClass: "badge-blue",
-    });
-
-    rows.push({
-      icon: <Layers size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-leaf",
-      label: "Deep water ratio",
-      value: `${deepPct}%`,
-      confidence: "88% conf.",
-      confClass: "badge-purple",
-    });
-
-    rows.push({
-      icon: <CheckCircle2 size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-building",
-      label: "Signal quality",
-      value: "High clarity",
-      confidence: `${overallConf}% conf.`,
-      confClass: "badge-peach",
-    });
+  const changedPercent = metric(change.changed_percent);
+  const changedPixels = metric(change.changed_pixels);
+  if (changedPercent !== null) {
+    add(<TrendingUp size={16} />, "finding-icon-trend", "Image difference", `${changedPercent.toFixed(2)}%`, "Measured");
+    if (changedPixels !== null) add(<Layers size={16} />, "finding-icon-leaf", "Changed pixels", changedPixels.toLocaleString(), "Measured");
+  }
+  const beforeCount = metric(buildingChange.before_count);
+  const afterCount = metric(buildingChange.after_count);
+  if (beforeCount !== null && afterCount !== null) {
+    add(<Building2 size={16} />, "finding-icon-building", "Building footprints", `${beforeCount} → ${afterCount}`);
+    const newCount = metric(buildingChange.possible_new_count);
+    if (newCount !== null) add(<MapPin size={16} />, "finding-icon-trend", "Possibly new", String(newCount));
+    const percent = metric(buildingChange.net_count_change_percent);
+    if (percent !== null) add(<TrendingUp size={16} />, "finding-icon-trend", "Count change", `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`);
   } else {
-    // Generic / Buildings / default metrics
-    const bCount = Number(buildingEv?.metrics?.count || buildingStats?.count || 142);
-    rows.push({
-      icon: <Building2 size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-building",
-      label: "Buildings detected",
-      value: `${bCount}`,
-      confidence: "92% conf.",
-      confClass: "badge-teal",
-    });
-
-    rows.push({
-      icon: <Leaf size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-leaf",
-      label: "Surrounding greens",
-      value: "35.8%",
-      confidence: "89% conf.",
-      confClass: "badge-blue",
-    });
-
-    rows.push({
-      icon: <Droplets size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-water",
-      label: "Hydrology proximity",
-      value: "800m",
-      confidence: "86% conf.",
-      confClass: "badge-purple",
-    });
-
-    rows.push({
-      icon: <TrendingUp size={16} strokeWidth={2.2} />,
-      iconClass: "finding-icon-trend",
-      label: "Spatial confidence",
-      value: "Supported",
-      confidence: `${overallConf}% conf.`,
-      confClass: "badge-peach",
-    });
+    const count = metric(building.count ?? building.building_count);
+    if (count !== null) {
+      add(<Building2 size={16} />, "finding-icon-building", "Building footprints", String(count));
+      const percent = metric(building.coverage_percent);
+      if (percent !== null) add(<Layers size={16} />, "finding-icon-leaf", "Footprint coverage", `${percent.toFixed(2)}%`);
+    }
   }
 
+  const landPercent = metric(land.land_percent ?? land.land_coverage_percent);
+  if (landPercent !== null) add(<Layers size={16} />, "finding-icon-trend", "Land coverage", `${landPercent.toFixed(2)}%`);
+  const breakdown = land.breakdown as Record<string, { percent?: number }> | undefined;
+  if (breakdown) {
+    const known = Object.entries(breakdown).filter(([name, part]) => name !== "unknown" && metric(part?.percent) !== null);
+    known.sort((a, b) => Number(b[1].percent) - Number(a[1].percent));
+    for (const [name, part] of known.slice(0, Math.max(0, 4 - rows.length))) {
+      add(<Leaf size={16} />, "finding-icon-leaf", name.replace(/_/g, " "), `${Number(part.percent).toFixed(2)}%`);
+    }
+  }
+  const waterPercent = metric(water.coverage_percent ?? water.total_coverage_percent);
+  if (waterPercent !== null && rows.length < 4) {
+    add(<Droplets size={16} />, "finding-icon-water", "Water coverage", `${waterPercent.toFixed(2)}%`);
+    const pixels = metric(water.selected_pixels ?? water.water_pixels);
+    if (pixels !== null) add(<MapPin size={16} />, "finding-icon-trend", "Water pixels", pixels.toLocaleString(), "Measured");
+  }
+  if (!rows.length) add(<Info size={16} />, "finding-icon-trend", "Analysis status", result.verdict.status.replace(/_/g, " "), "See evidence");
+
+  const elapsed = metric(result.timings?.analysis_ms);
   return (
     <div className="key-findings-card" onClick={onOpenEvidence} title="Click to view full evidence details">
-      {/* Header */}
       <div className="key-findings-header">
         <h4 className="key-findings-title">Key Findings</h4>
-        <div className="key-findings-timing">
-          <Clock size={13} strokeWidth={2} />
-          <span>Analyzed in {latencyStr}</span>
-        </div>
+        {elapsed !== null && <div className="key-findings-timing"><Clock size={13} strokeWidth={2} /><span>Analyzed in {(elapsed / 1000).toFixed(1)}s</span></div>}
       </div>
-
-      {/* Rows */}
       <div className="key-findings-list">
-        {rows.map((row, idx) => (
+        {rows.slice(0, 4).map((row, idx) => (
           <div key={idx} className="key-finding-row">
-            <div className="finding-label-col">
-              <span className={`finding-icon-wrap ${row.iconClass}`}>
-                {row.icon}
-              </span>
-              <span className="finding-label-text">{row.label}</span>
-            </div>
-
-            <div className="finding-value-col">
-              <span className="finding-value-text">{row.value}</span>
-            </div>
-
-            <div className="finding-badge-col">
-              <span className={`finding-conf-badge ${row.confClass}`}>
-                {row.confidence}
-              </span>
-            </div>
+            <div className="finding-label-col"><span className={`finding-icon-wrap ${row.iconClass}`}>{row.icon}</span><span className="finding-label-text">{row.label}</span></div>
+            <div className="finding-value-col"><span className="finding-value-text">{row.value}</span></div>
+            <div className="finding-badge-col"><span className="finding-conf-badge badge-teal">{row.confidence}</span></div>
           </div>
         ))}
       </div>

@@ -32,11 +32,13 @@ def validate_result_evidence(result,output):
         if value is not None and (not math.isfinite(value) or value<0): raise ValueError("Invalid spatial measurement.")
     if result.get("quality_gate_passed") is False and not result.get("count_reliability"):
         raise ValueError("Specialist quality validation failed.")
-    finals = [p for p in result.get("paths",[]) if p.name in {"water_mask.tif","buildings_labels.tif","land_cover_map.tif"}]
+    finals = [p for p in result.get("paths",[]) if p.name in {"water_mask.tif","buildings_labels.tif","land_cover_map.tif","change_labels.tif"}]
     for path in finals:
         with rasterio.open(path) as src:
             labels = src.read(1); selected = labels > 0; valid = src.read_masks(1) > 0
             if np.any(selected & ~valid): raise ValueError("Final mask includes NoData pixels.")
+            if "valid_pixels" in result and result["valid_pixels"] != int(valid.sum()):
+                raise ValueError("Final mask and valid-pixel denominator disagree.")
             if result.get("selected_pixels") != int(selected.sum()): raise ValueError("Final mask and pixel count disagree.")
             if result.get("area_m2") is not None and src.crs is None: raise ValueError("Area is unavailable without a CRS.")
             if features is not None:

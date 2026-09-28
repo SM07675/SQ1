@@ -93,6 +93,25 @@ def test_land_only_mask_excludes_water_and_unknown(tmp_path, monkeypatch):
         np.testing.assert_array_equal(src.read(1) > 0, vegetation > 0)
 
 
+def test_explicit_land_request_does_not_relabel_water_as_land(tmp_path, monkeypatch):
+    from .test_building_pipeline_invariants import _write_rgb
+    from satquery_engine.services.land_cover import classify_land_cover_composite
+    source = _write_rgb(tmp_path / "source.tif", 30, 20)
+    water = np.zeros((20, 30), dtype="uint8")
+    water[:, :10] = 1
+    water_path = scene(tmp_path / "water_mask.tif", water)
+    vegetation_path = scene(tmp_path / "vegetation_labels.tif", np.zeros_like(water))
+    monkeypatch.setattr("satquery_engine.services.landcover_specialist.compatibility", lambda _: (False, "Test: no learned evidence"))
+    result = classify_land_cover_composite(source, tmp_path / "land", query="Find land",
+        water_result={"paths": [water_path]}, vegetation_result={"paths": [vegetation_path]})
+    assert result["land_pixels"] == 400
+    assert result["land_percent"] == pytest.approx(100 * 400 / 600)
+    assert result["breakdown"]["water"]["pixels"] == 200
+    assert result["breakdown"]["unknown"]["pixels"] == 400
+    with rasterio.open(tmp_path / "land/land_only_mask.tif") as src:
+        np.testing.assert_array_equal(src.read(1) > 0, water == 0)
+
+
 @pytest.mark.asyncio
 async def test_combined_analysis_shares_water_and_publishes_filtered_counts(tmp_path, monkeypatch):
     from .test_building_pipeline_invariants import _write_rgb, _FakeSession, _patch_checkpoint, _patch_session

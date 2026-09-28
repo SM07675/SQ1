@@ -36,7 +36,15 @@ async def analyze(
         from app.services.croma_pipeline import inspect_modality
 
         modality = inspect_modality(image_paths[0]).modality
-    if not uses_surface_pipeline(query, pair_type, len(image_paths), modality):
+    temporal_optical = False
+    if len(image_paths) == 2 and pair_type in {"auto", "bi_temporal"}:
+        from app.services.croma_pipeline import inspect_modality
+        from satquery_engine.services.intents import plan_query as plan_integrated
+
+        modalities = [inspect_modality(path).modality for path in image_paths]
+        temporal_optical = (all(item in {"optical", "multispectral"} for item in modalities)
+                            and plan_integrated(query, 2, pair_type).requires_temporal_relationship)
+    if not (uses_surface_pipeline(query, pair_type, len(image_paths), modality) or temporal_optical):
         # Keep the current project's SAR, change, vegetation, VQA, and other
         # analysis routes and models unchanged.
         from app.services.orchestrator import analyze as analyze_current
@@ -63,11 +71,27 @@ async def analyze(
     # The current dashboard expects this summary field. Use the canonical answer
     # verbatim so that counts, areas, and limitations cannot drift from the report.
     verdict = result.verdict
+    metrics = []
+    stats = result.statistics
+    for key, label, value_key, suffix in (
+        ("water_measure", "Water coverage", "coverage_percent", "%"),
+        ("land_cover", "Land coverage", "land_percent", "%"),
+        ("buildings_a", "Building count", "count", ""),
+        ("building_match", "Building count change", "net_count_change_percent", "%"),
+        ("change", "Changed pixels", "changed_percent", "%"),
+        ("water_measure", "Water coverage after", "after_percent", "%"),
+        ("vegetation_measure", "Vegetation coverage after", "after_percent", "%"),
+    ):
+        value = (stats.get(key) or {}).get(value_key)
+        if value is not None:
+            metrics.append(SummaryMetric(label=label, value=f"{value:.2f}{suffix}" if suffix else str(value)))
+    if not metrics:
+        metrics.append(SummaryMetric(label="Status", value=verdict.status.value.replace("_", " ").title()))
     payload["summary"] = AnalysisSummary(
         title="ANALYSIS SUMMARY",
         headline=verdict.answer,
         explanation=verdict.answer,
-        metrics=[SummaryMetric(label="Status", value=verdict.status.value.replace("_", " ").title())],
+        metrics=metrics[:4],
         is_insufficient=verdict.status.value in {
             "insufficient_evidence", "invalid_input", "unsupported_task", "model_unavailable"
         },

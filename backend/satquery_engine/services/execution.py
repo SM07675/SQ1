@@ -114,6 +114,7 @@ async def analyze(*,result_id,query,pair_type,image_paths,output_dir,progress=No
                     models.extend(water_context.get("models_used", []))
                     result=await asyncio.to_thread(detect_buildings,working[params["asset"]],sub,emit,water_result=water_context)
                     summary=f'I found approximately {result["count"]} visible building footprints in image {params["asset"]+1}.'
+                    summary += f' Their masks cover {result["selected_pixels"]} of {result["valid_pixels"]} valid image pixels ({result["coverage_percent"]:.2f}%).'
                     if result.get("count_reliability") == "COUNT_UNRELIABLE":
                         summary += ' This is a low-confidence detection count; an accurate building inventory cannot be established from this result.'
                     if result["count"] == 0:
@@ -124,6 +125,8 @@ async def analyze(*,result_id,query,pair_type,image_paths,output_dir,progress=No
                 elif node.tool=="building_match":
                     result=await asyncio.to_thread(match_buildings,results["buildings_a"],results["buildings_b"],sub)
                     summary=f'The detected building count changed from {result["before_count"]} to {result["after_count"]}. There are {result["possible_new_count"]} possible new and {result["possible_removed_count"]} possibly removed footprints.'
+                    if result["net_count_change_percent"] is not None:
+                        summary += f' Net detected count change is {result["net_count_change_percent"]:+.2f}% relative to the first image.'
                     if result['net_footprint_area_m2'] is not None:
                         summary += f' The net detected footprint area change is {result["net_footprint_area_m2"]:+.1f} square metres; this measures buildings, not all built-up surfaces.'
                 elif node.tool=="spectral":
@@ -136,7 +139,7 @@ async def analyze(*,result_id,query,pair_type,image_paths,output_dir,progress=No
                     if params["target"] == "water" and result.get("evidence_state") == "INSUFFICIENT_EVIDENCE":
                         summary="Water boundaries could not be verified from this RGB image because the compatible aerial models failed."
                     else:
-                        summary=f'{result["method"]} identifies {params["target"]}-like regions{loc} covering {result["coverage_percent"]:.2f}% of valid pixels ({unit}).'
+                        summary=f'{result["method"]} identifies {params["target"]}-like regions{loc} covering {result["selected_pixels"]} of {result["valid_pixels"]} valid image pixels ({result["coverage_percent"]:.2f}%; {unit}).'
                 elif node.tool=="land_cover":
                     from satquery_engine.services.land_cover import classify_land_cover_composite
                     result=await asyncio.to_thread(classify_land_cover_composite,working[0],sub,query,
@@ -145,7 +148,11 @@ async def analyze(*,result_id,query,pair_type,image_paths,output_dir,progress=No
                     summary=result["summary"]
                 elif node.tool=="spectral_change":
                     result=await asyncio.to_thread(measure_cover_change,*working,sub,params["target"])
-                    summary=f'The area meeting the {params["target"]} index threshold changed by {result["net_percentage_points"]:+.2f} percentage points across shared valid pixels.'
+                    summary=(f'The {params["target"]} index threshold covers {result["before_pixels"]} of {result["valid_pixels"]} shared valid pixels '
+                             f'({result["before_percent"]:.2f}%) before and {result["after_pixels"]} ({result["after_percent"]:.2f}%) after. '
+                             f'Gain is {result["gain_pixels"]} pixels ({result["gain_percent"]:.2f}%); loss is '
+                             f'{result["loss_pixels"]} pixels ({result["loss_percent"]:.2f}%). '
+                             f'Net change is {result["net_percentage_points"]:+.2f} percentage points.')
                 elif node.tool=="change":
                     from satquery_engine.services.raster import deterministic_change_detection
                     result=await asyncio.to_thread(deterministic_change_detection,*working,sub)
@@ -153,7 +160,7 @@ async def analyze(*,result_id,query,pair_type,image_paths,output_dir,progress=No
                     result["method"]="Radiometric difference threshold; not a learned change model"
                     result["evidence_strength"]=0.0
                     result["limitations"]=["This measures image differences, which can reflect illumination or season. The learned change specialist is unavailable; the type of change is unverified."]
-                    summary=f'I measured image differences over {result["changed_percent"]:.2f}% of the sampled pixels. I cannot establish what caused them.'
+                    summary=f'I measured image differences in {result["changed_pixels"]} of {result["total_pixels"]} shared valid pixels ({result["changed_percent"]:.2f}%) at native resolution. I cannot establish what caused them.'
                 elif node.tool=="fusion":
                     external=await registry.invoke("croma",{"optical_path":str(working[0]),"sar_path":str(working[1])})
                     if not external.get("available"): raise ValueError("The optical-SAR fusion specialist is unavailable. No fused result was generated.")

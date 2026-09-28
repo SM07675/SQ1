@@ -60,4 +60,6 @@ models/**/*.zip
 Thumbs.db
 .vercel/
 **/.vercel/
+logs/
+*.zip
 

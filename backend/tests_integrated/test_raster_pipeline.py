@@ -115,3 +115,22 @@ def test_change_detection_works_without_crs(tmp_path: Path) -> None:
     assert result["geojson_path"].exists()
 
 
+def test_change_counts_native_pixels_beyond_preview_size(tmp_path: Path) -> None:
+    before = np.zeros((32, 1400), dtype="float32")
+    after = before.copy()
+    after[8:24, 700:900] = 100
+    a, b = tmp_path / "before.tif", tmp_path / "after.tif"
+    _write(a, before)
+    _write(b, after)
+
+    result = deterministic_change_detection(a, b, tmp_path / "change")
+    from satquery_engine.services.quality_gate import validate_result_evidence
+    validate_result_evidence(result, tmp_path / "change")
+    with rasterio.open(tmp_path / "change/change_labels.tif") as mask:
+        assert mask.shape == before.shape
+        assert result["changed_pixels"] == int((mask.read(1) > 0).sum())
+    assert result["total_pixels"] == before.size
+    assert result["sampled_pixels"] == before.size
+    assert result["changed_percent"] == round(100 * result["changed_pixels"] / before.size, 3)
+
+

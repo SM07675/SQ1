@@ -155,13 +155,15 @@ def measure_cover_change(before, after, output, target):
     am, bm = (a > threshold) & valid, (b > threshold) & valid
     gain, loss = bm & ~am, am & ~bm
     labels, _ = ndimage.label(gain | loss)
-    result = export_labels(labels, before, output, f"{target.replace('-', '_')}_change", transform=transform)
+    result = export_labels(labels, before, output, f"{target.replace('-', '_')}_change", transform=transform, valid_mask=valid)
     for name, mask, color in [("gain", gain, (20,200,100)), ("loss", loss, (240,70,70))]:
-        sub = export_labels(ndimage.label(mask)[0], before, output, f"{target.replace('-', '_')}_{name}", transform=transform, color=color)
+        sub = export_labels(ndimage.label(mask)[0], before, output, f"{target.replace('-', '_')}_{name}", transform=transform, color=color, valid_mask=valid)
         result["paths"].extend(sub["paths"])
         result[f"{name}_area_m2"] = sub["area_m2"]
     result.update(method=f"{index.upper()} threshold comparison", before_pixels=int(am.sum()), after_pixels=int(bm.sum()),
                   gain_pixels=int(gain.sum()), loss_pixels=int(loss.sum()), net_pixels=int(bm.sum()-am.sum()),
+                  before_percent=float(100*am.sum()/valid.sum()), after_percent=float(100*bm.sum()/valid.sum()),
+                  gain_percent=float(100*gain.sum()/valid.sum()), loss_percent=float(100*loss.sum()/valid.sum()),
                   net_percentage_points=float(100*(bm.sum()-am.sum())/valid.sum()),
                   mean_delta_index=float((b-a)[valid].mean()), valid_pixels=int(valid.sum()),
                   evidence_strength=float(np.mean(np.clip(np.abs(b[valid]-a[valid]),0,1))),

@@ -329,8 +329,6 @@ def classify_land_cover_composite(
     _has_land = any(_re.search(pat, q_lower) for pat in _LAND_KW)
     _has_water = any(_re.search(pat, q_lower) for pat in _WATER_KW)
     wants_land_only = _has_land and not _has_water
-    if wants_land_only:
-        water = np.zeros(dims, dtype=bool)
 
     conflicts = (water & buildings) | (vegetation & buildings) | (water & vegetation)
     # Preserve canonical water exactly. Disputed non-water pixels remain unknown.
@@ -350,8 +348,7 @@ def classify_land_cover_composite(
     labels[pool & ~water & ~buildings] = 10
     labels[veg & ~agriculture] = 2
     labels[built] = 3
-    if not wants_land_only:
-        labels[water] = 1
+    labels[water] = 1
     if model_classes is not None:
         labels[veg & (np.isin(model_classes, [12, 13, 14]) if is_flair_hub else (model_classes == 2))] = 5
         labels[road] = 6
@@ -378,13 +375,8 @@ def classify_land_cover_composite(
     if not valid.any():
         raise ValueError("No valid land-cover pixels are available.")
 
-    # When user explicitly queries for land only, treat residual unclassified land as bare pervious terrain
-    if wants_land_only:
-        residual_land = (labels == 4) & valid & ~water
-        if residual_land.any():
-            labels[residual_land] = 7
-            if model_confidence is not None:
-                model_confidence[residual_land] = 0.45
+    # Unknown terrestrial pixels remain unknown: a land-only request does not
+    # establish that residual pixels are bare soil.
 
     # Remove isolated model speckles without expanding boundaries or assigning
     # neighboring land a guessed class. Canonical water/buildings are preserved.
@@ -431,12 +423,11 @@ def classify_land_cover_composite(
     Image.fromarray(rgba).save(output_dir / "land_cover_mask.png")
     preview = Image.open(output_dir / "land_cover_original.png").convert("RGBA")
     # Land comprises all valid terrestrial non-water pixels.
-    if wants_land_only:
-        land_mask = valid & (labels != 1)
-    else:
-        land_mask = valid & np.isin(labels, [2, 3, 5, 6, 7, 8, 9])
+    land_mask = valid & ~np.isin(labels, [1, 10]) if wants_land_only else valid & np.isin(labels, [2, 3, 5, 6, 7, 8, 9])
     land_rgba = rgba.copy()
     land_rgba[~land_mask] = 0
+    # Transparent unknown land should not imply a known land-cover class.
+    land_rgba[labels == 4] = [194, 155, 56, 90] if wants_land_only else [0, 0, 0, 0]
     land_overlay = output_dir / "land_only_overlay.png"
     Image.alpha_composite(preview, Image.fromarray(land_rgba).resize(preview.size, Image.Resampling.NEAREST)).convert("RGB").save(land_overlay)
     if wants_land_only:
@@ -485,14 +476,19 @@ def classify_land_cover_composite(
         "road": breakdown.get("road", {}).get("pixels", 0),
     }
     dominant = max(category_pixels, key=lambda k: category_pixels[k]) if any(category_pixels.values()) else (max(known, key=lambda k: known[k]["pixels"]) if known else "unknown")
-    summary = "Estimated image coverage: " + ", ".join(f"{v['percent']:.2f}% {k.replace('_',' ')}" for k, v in breakdown.items()) + "."
+    summary = (f"Land occupies {int(land_mask.sum())} of {total} valid image pixels "
+               f"({100.0 * int(land_mask.sum()) / total:.2f}%). " if wants_land_only else "")
+    summary += "Estimated image coverage: " + ", ".join(
+        f"{v['pixels']} pixels ({v['percent']:.2f}%) {k.replace('_',' ')}" for k, v in breakdown.items()
+    ) + "."
     valid_known_pixels = sum(v["pixels"] for v in known.values())
-    evidence_strength = float(sum(v["confidence"] * v["pixels"] for v in known.values()) / valid_known_pixels) if valid_known_pixels > 0 else 0.85
+    evidence_strength = float(sum(v["confidence"] * v["pixels"] for v in known.values()) / valid_known_pixels) if valid_known_pixels > 0 else 0.0
     result = {**spatial, "method":"Aerial land-cover specialist with deterministic evidence fusion" if learned is not None else "Specialist mask composition", "target":"land_cover", "summary":summary,
         "breakdown":breakdown, "dominant_class":dominant, "valid_pixels":total,
         "coverage_percent":100.0, "water_percent":breakdown["water"]["percent"],
-        "classified_land_percent":100.0 * int(land_mask.sum()) / total,
-        "classified_land_pixels":int(land_mask.sum()),
+        "classified_land_percent":100.0 * int((land_mask & (labels != 4)).sum()) / total,
+        "classified_land_pixels":int((land_mask & (labels != 4)).sum()),
+        "land_pixels":int(land_mask.sum()), "land_percent":100.0 * int(land_mask.sum()) / total,
         "noise_pixels_withheld":removed_speckles,
         "vegetation_percent":breakdown["vegetation"]["percent"] + breakdown["woodland"]["percent"], "built_up_percent":breakdown["built_up"]["percent"],
         "vegetation_mode":veg_mode, "built_up_mode":"BUILDING_FOOTPRINTS", "native_resolution":True,

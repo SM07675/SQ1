@@ -704,6 +704,8 @@ def detect_buildings(path, output, progress=None, *, water_result=None):
 
         result.update(
             count=len(result["features"]),
+            valid_pixels=int(valid.sum()),
+            coverage_percent=round(100.0 * result["selected_pixels"] / int(valid.sum()), 3),
             surface_exclusion=surface_exclusion,
             building_count=len(result["features"]),
             building_count_type="visible_footprint_count",
@@ -860,6 +862,8 @@ def match_buildings(a, b, output):
         "before_count": a["count"],
         "after_count": b["count"],
         "net_count_change": b["count"] - a["count"],
+        "net_count_change_percent": (100.0 * (b["count"] - a["count"]) / a["count"]
+                                     if a["count"] else None),
         "persistent_count": len(matches),
         "possible_new_count": b["count"] - len(mb),
         "possible_removed_count": a["count"] - len(ma),

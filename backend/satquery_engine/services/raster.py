@@ -212,14 +212,12 @@ def render_preview(path: Path, output_path: Path, max_size: int = 1024) -> Path:
     return output_path
 
 
-def _read_gray(path: Path, max_size: int = 1024) -> tuple[np.ndarray, Affine, rasterio.crs.CRS | None]:
+def _read_gray(path: Path) -> tuple[np.ndarray, Affine, rasterio.crs.CRS | None]:
     with rasterio.open(path) as src:
-        ratio = min(1.0, max_size / max(src.width, src.height))
-        out_w = max(1, round(src.width * ratio))
-        out_h = max(1, round(src.height * ratio))
-        data = src.read(1, out_shape=(out_h, out_w), resampling=Resampling.bilinear,masked=True).astype("float32").filled(np.nan)
-        transform = src.transform @ Affine.scale(src.width / out_w, src.height / out_h)
-        return _normalize(data), transform, src.crs
+        if src.width * src.height > 32_000_000:
+            raise ValueError("Change analysis supports up to 32 million native pixels.")
+        data = src.read(1, masked=True).astype("float32").filled(np.nan)
+        return data, src.transform, src.crs
 
 
 def _denoise_binary(mask: np.ndarray) -> np.ndarray:
@@ -252,13 +250,31 @@ def deterministic_change_detection(before: Path, after: Path, output_dir: Path) 
     class changed or whether built-up/water/vegetation increased.
     """
     a, transform, crs = _read_gray(before)
-    b, _, _ = _read_gray(after)
-    if a.shape != b.shape:
-        raise ValueError("Rasters must be aligned to the same sampled grid")
+    b, after_transform, after_crs = _read_gray(after)
+    if a.shape != b.shape or transform != after_transform or crs != after_crs:
+        raise ValueError("Rasters must be aligned to the same native pixel grid")
 
     valid = np.isfinite(a) & np.isfinite(b)
     if not valid.any():
         raise ValueError("No shared valid pixels are available for change measurement")
+    # Use one scale for both dates. Normalizing each date separately can erase
+    # real changes or manufacture differences in otherwise identical pixels.
+    stride = max(1, int(np.ceil(np.sqrt(valid.sum() / 500_000))))
+    samples = np.concatenate((a[::stride, ::stride][valid[::stride, ::stride]],
+                              b[::stride, ::stride][valid[::stride, ::stride]]))
+    if samples.size:
+        low, high = np.percentile(samples, [2, 98])
+    else:
+        low = high = 0.0
+    if high <= low:
+        low, high = float(min(a[valid].min(), b[valid].min())), float(max(a[valid].max(), b[valid].max()))
+    if high > low:
+        scale = float(high - low)
+        a = np.clip((a - low) / scale, 0, 1)
+        b = np.clip((b - low) / scale, 0, 1)
+    else:
+        a = np.where(valid, 0.0, np.nan).astype("float32")
+        b = a.copy()
 
     std_a = float(np.std(a[valid]))
     std_b = float(np.std(b[valid]))
@@ -284,7 +300,7 @@ def deterministic_change_detection(before: Path, after: Path, output_dir: Path) 
 
     from scipy import ndimage
     from satquery_engine.services.spatial_outputs import export_labels
-    spatial=export_labels(ndimage.label(mask)[0],before,output_dir,"change",transform=transform,color=(239,68,68))
+    spatial=export_labels(ndimage.label(mask)[0],before,output_dir,"change",transform=transform,color=(239,68,68),valid_mask=valid)
     mask_path=output_dir/"change_mask.png"
     geojson_path=output_dir/"change.geojson"
 
@@ -292,6 +308,10 @@ def deterministic_change_detection(before: Path, after: Path, output_dir: Path) 
         "changed_pixels": changed_pixels,
         "total_pixels": total_pixels,
         "changed_percent": round(changed_percent, 3),
+        "selected_pixels": changed_pixels,
+        "valid_pixels": total_pixels,
+        "sampled_pixels": int(valid.size),
+        "native_resolution": True,
         "threshold": round(threshold, 4),
         "region_count": spatial["region_count"],
         "area_m2": spatial["area_m2"],
