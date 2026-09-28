@@ -422,12 +422,15 @@ def classify_land_cover_composite(
         rgba[labels == ident] = [*color, 100 if ident == 4 else 140]
     Image.fromarray(rgba).save(output_dir / "land_cover_mask.png")
     preview = Image.open(output_dir / "land_cover_original.png").convert("RGBA")
-    # Land comprises all valid terrestrial non-water pixels.
-    land_mask = valid & ~np.isin(labels, [1, 10]) if wants_land_only else valid & np.isin(labels, [2, 3, 5, 6, 7, 8, 9])
+    # A pixel with no established class cannot become land solely because the
+    # user asked for land. Keep the exported mask and reported count identical.
+    land_mask = valid & np.isin(labels, [2, 3, 5, 6, 7, 8, 9])
+    unknown_mask = valid & (labels == 4)
     land_rgba = rgba.copy()
     land_rgba[~land_mask] = 0
-    # Transparent unknown land should not imply a known land-cover class.
-    land_rgba[labels == 4] = [194, 155, 56, 90] if wants_land_only else [0, 0, 0, 0]
+    # Unknown remains visible as uncertainty in land-only previews, but is
+    # never present in the land mask or the land percentage.
+    land_rgba[unknown_mask] = [194, 155, 56, 90] if wants_land_only else [0, 0, 0, 0]
     land_overlay = output_dir / "land_only_overlay.png"
     Image.alpha_composite(preview, Image.fromarray(land_rgba).resize(preview.size, Image.Resampling.NEAREST)).convert("RGB").save(land_overlay)
     if wants_land_only:
@@ -446,7 +449,7 @@ def classify_land_cover_composite(
                            dtype="uint8", crs=crs, transform=grid, nodata=0, compress="deflate") as dst:
             dst.write(labels.astype("uint8"), 1); dst.write_mask(valid.astype("uint8")*255)
             dst.update_tags(classes=json.dumps(names))
-    limitations += ["Land classes are estimates from available spatial evidence. Unknown includes land whose type cannot be established.",
+    limitations += ["Land classes are estimates from available spatial evidence. Unknown pixels may be land or water and are excluded from classified land and water totals.",
                     "BigEarthNet scene-level inference is unavailable; dense aerial classes come from the spatial land-cover specialist when compatible.",
                     "Built-up includes FLAIR impervious surface when compatible; it is not a count of buildings." if is_flair_hub else "Built-up coverage here measures non-disputed building footprints, not all roads or paved surfaces."]
     if learned is not None:
@@ -476,19 +479,32 @@ def classify_land_cover_composite(
         "road": breakdown.get("road", {}).get("pixels", 0),
     }
     dominant = max(category_pixels, key=lambda k: category_pixels[k]) if any(category_pixels.values()) else (max(known, key=lambda k: known[k]["pixels"]) if known else "unknown")
-    summary = (f"Land occupies {int(land_mask.sum())} of {total} valid image pixels "
-               f"({100.0 * int(land_mask.sum()) / total:.2f}%). " if wants_land_only else "")
-    summary += "Estimated image coverage: " + ", ".join(
-        f"{v['pixels']} pixels ({v['percent']:.2f}%) {k.replace('_',' ')}" for k, v in breakdown.items()
-    ) + "."
+    land_pixels = int(land_mask.sum())
+    unknown_pixels = int(unknown_mask.sum())
+    possible_land_pixels = land_pixels + unknown_pixels
+    summary = (f"Estimated classified land covers {land_pixels} of {total} valid image pixels "
+               f"({100.0 * land_pixels / total:.2f}%). "
+               f"Unclassified pixels: {unknown_pixels} ({100.0 * unknown_pixels / total:.2f}%). ")
+    if unknown_pixels:
+        summary += (f"Land could cover up to {100.0 * possible_land_pixels / total:.2f}% "
+                    "if every unclassified pixel is land; its exact share cannot be established. ")
+    measured_classes = [
+        f"{k.replace('_',' ')} {v['pixels']} pixels ({v['percent']:.2f}%)"
+        for k, v in breakdown.items() if v["pixels"] and k != "unknown"
+    ]
+    if measured_classes:
+        summary += "Estimated classes: " + ", ".join(measured_classes) + "."
     valid_known_pixels = sum(v["pixels"] for v in known.values())
     evidence_strength = float(sum(v["confidence"] * v["pixels"] for v in known.values()) / valid_known_pixels) if valid_known_pixels > 0 else 0.0
     result = {**spatial, "method":"Aerial land-cover specialist with deterministic evidence fusion" if learned is not None else "Specialist mask composition", "target":"land_cover", "summary":summary,
         "breakdown":breakdown, "dominant_class":dominant, "valid_pixels":total,
         "coverage_percent":100.0, "water_percent":breakdown["water"]["percent"],
-        "classified_land_percent":100.0 * int((land_mask & (labels != 4)).sum()) / total,
-        "classified_land_pixels":int((land_mask & (labels != 4)).sum()),
-        "land_pixels":int(land_mask.sum()), "land_percent":100.0 * int(land_mask.sum()) / total,
+        "classified_land_percent":100.0 * land_pixels / total,
+        "classified_land_pixels":land_pixels,
+        "land_pixels":land_pixels, "land_percent":100.0 * land_pixels / total,
+        "unknown_pixels":unknown_pixels, "unknown_percent":100.0 * unknown_pixels / total,
+        "possible_land_pixels":possible_land_pixels,
+        "possible_land_percent":100.0 * possible_land_pixels / total,
         "noise_pixels_withheld":removed_speckles,
         "vegetation_percent":breakdown["vegetation"]["percent"] + breakdown["woodland"]["percent"], "built_up_percent":breakdown["built_up"]["percent"],
         "vegetation_mode":veg_mode, "built_up_mode":"BUILDING_FOOTPRINTS", "native_resolution":True,

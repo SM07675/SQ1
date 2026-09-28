@@ -89,6 +89,9 @@ def test_land_only_mask_excludes_water_and_unknown(tmp_path, monkeypatch):
     result = classify_land_cover_composite(source, tmp_path / "land",
         water_result={"paths": [water_path]}, vegetation_result={"paths": [vegetation_path]})
     assert result["classified_land_percent"] == pytest.approx(100 / 3)
+    assert result["land_pixels"] == result["classified_land_pixels"] == 200
+    assert result["unknown_pixels"] == 200
+    assert result["possible_land_percent"] == pytest.approx(100 * 400 / 600)
     with rasterio.open(tmp_path / "land/land_only_mask.tif") as src:
         np.testing.assert_array_equal(src.read(1) > 0, vegetation > 0)
 
@@ -104,12 +107,13 @@ def test_explicit_land_request_does_not_relabel_water_as_land(tmp_path, monkeypa
     monkeypatch.setattr("satquery_engine.services.landcover_specialist.compatibility", lambda _: (False, "Test: no learned evidence"))
     result = classify_land_cover_composite(source, tmp_path / "land", query="Find land",
         water_result={"paths": [water_path]}, vegetation_result={"paths": [vegetation_path]})
-    assert result["land_pixels"] == 400
-    assert result["land_percent"] == pytest.approx(100 * 400 / 600)
+    assert result["land_pixels"] == 0
+    assert result["land_percent"] == 0
+    assert result["possible_land_percent"] == pytest.approx(100 * 400 / 600)
     assert result["breakdown"]["water"]["pixels"] == 200
     assert result["breakdown"]["unknown"]["pixels"] == 400
     with rasterio.open(tmp_path / "land/land_only_mask.tif") as src:
-        np.testing.assert_array_equal(src.read(1) > 0, water == 0)
+        assert not src.read(1).any()
 
 
 @pytest.mark.asyncio

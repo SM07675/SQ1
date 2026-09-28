@@ -53,6 +53,9 @@ _FRIENDLY_METRIC_NAMES = {
     "net_percentage_points": "Net Change (%)",
     "resolution_m": "Resolution (metres/pixel)",
     "water_percent": "Water Coverage (%)",
+    "land_percent": "Classified Land Coverage (%)",
+    "unknown_percent": "Unclassified Coverage (%)",
+    "possible_land_percent": "Possible Land Upper Bound (%)",
     "vegetation_percent": "Green/Vegetation (%)",
     "built_up_percent": "Built-up Area (%)",
 }
@@ -61,7 +64,7 @@ _FRIENDLY_CLASS_NAMES = {
     "water": "💧 Water Bodies",
     "vegetation": "🌿 Grass & Vegetation",
     "built_up": "🏗️ Buildings & Structures",
-    "unknown": "🗺️ Unclassified Land",
+    "unknown": "🗺️ Unclassified Area",
     "woodland": "🌲 Forest & Woodland",
     "road": "🛣️ Roads",
     "bare_pervious": "🏜️ Bare Soil / Land",
@@ -100,8 +103,8 @@ def _simplify_limitation(text):
             "Plant and water areas were identified using basic color analysis. Specialized sensor data was not available for more precise detection.",
         "BigEarthNet scene-level inference is unavailable":
             "The AI scene classification model was not available for this analysis.",
-        "Land classes are estimates from available spatial evidence. Unknown includes land whose type cannot be established.":
-            "Land types shown are best estimates. Some areas couldn't be identified and are marked as 'Unclassified'.",
+        "Land classes are estimates from available spatial evidence. Unknown pixels may be land or water and are excluded from classified land and water totals.":
+            "Land types shown are estimates. Unclassified areas could be land or water and are excluded from the classified totals.",
     }
     for old, new in replacements.items():
         if old in text:
@@ -224,6 +227,7 @@ def write_pdf_report(output_dir: Path, payload):
     story.append(Spacer(1, 6))
 
     keys = {"count", "count_state", "area_m2", "selected_pixels", "region_count", "coverage_percent",
+            "valid_pixels", "land_pixels", "land_percent", "unknown_pixels", "unknown_percent", "possible_land_percent",
             "before_count", "after_count", "persistent_count",
             "possible_new_count", "possible_removed_count", "net_count_change",
             "net_footprint_area_m2", "changed_pixels", "changed_percent", "total_pixels",
@@ -239,7 +243,7 @@ def write_pdf_report(output_dir: Path, payload):
             heading("Land Cover Breakdown")
             table([
                 (_friendly_class(name),
-                 f'{values["percent"]:.1f}% of the image' +
+                 f'{values["percent"]:.2f}% of valid pixels ({values["pixels"]:,} pixels)' +
                  (f' — about {values["area_m2"]:,.0f} square metres' if values.get("area_m2") is not None else ''))
                 for name, values in stats["breakdown"].items()
             ])
