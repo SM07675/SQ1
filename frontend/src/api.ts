@@ -9,7 +9,7 @@ import { optimizeImageIfNeeded } from "./utils/imageOptimizer";
 
 export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
-export async function apiFetch(path: string, options?: RequestInit): Promise<Response> {
+export async function apiFetch(path: string, options?: RequestInit, retries = 1): Promise<Response> {
   const primaryUrl = `${API_BASE}${path}`;
   try {
     const res = await fetch(primaryUrl, options);
@@ -19,6 +19,11 @@ export async function apiFetch(path: string, options?: RequestInit): Promise<Res
     }
     return res;
   } catch (err) {
+    if (retries > 0) {
+      console.warn(`[SatQuery API] Network interrupted during container wake-up. Retrying in 2s...`, err);
+      await new Promise((r) => setTimeout(r, 2000));
+      return apiFetch(path, options, retries - 1);
+    }
     // Never fall back to Vercel edge proxy if sending FormData (image upload)
     // because Vercel has a hard 4.5MB request limit and will always fail with HTTP 413.
     const isFormData = options?.body instanceof FormData;

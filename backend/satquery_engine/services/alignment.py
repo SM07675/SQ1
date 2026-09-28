@@ -65,8 +65,6 @@ def align_pair(path_a, path_b, output_dir, cross_modal=False):
     with rasterio.open(path_a) as a, rasterio.open(path_b) as b:
         if bool(a.crs) != bool(b.crs):
             raise ValueError("Both images need georeferencing for a map-space comparison.")
-        if not a.crs and (a.width, a.height) != (b.width, b.height):
-            raise ValueError("Images without map coordinates must have the same dimensions; resizing would invent alignment.")
         if a.width*a.height > 32_000_000:
             raise ValueError("This pair exceeds the current 32-million-pixel registration limit.")
         da = a.read(masked=True).astype("float32").filled(np.nan)
@@ -78,10 +76,27 @@ def align_pair(path_a, path_b, output_dir, cross_modal=False):
                           dst_nodata=np.nan, resampling=Resampling.bilinear)
             method = "geospatial_reprojection"
             sy = sx = 0.0
+        elif (a.width, a.height) != (b.width, b.height):
+            # Auto-resample non-georeferenced pair to common reference dimensions (a.width, a.height)
+            try:
+                import cv2
+                raw_b = b.read(masked=True).astype("float32").filled(np.nan)
+                resized_bands = [
+                    cv2.resize(raw_b[i], (a.width, a.height), interpolation=cv2.INTER_LINEAR)
+                    for i in range(b.count)
+                ]
+                db = np.stack(resized_bands, axis=0)
+            except Exception:
+                from scipy.ndimage import zoom
+                raw_b = b.read(masked=True).astype("float32").filled(np.nan)
+                zoom_factors = (1.0, a.height / b.height, a.width / b.width)
+                db = zoom(raw_b, zoom_factors, order=1).astype("float32")
+            method = "pixel_grid_resampled"
+            sy = sx = 0.0
         else:
             db = b.read(masked=True).astype("float32").filled(np.nan)
             method = "pixel_grid"
-            sy=sx=0.
+            sy = sx = 0.0
         residual_details={"residual_error_pixels":None}
         if not cross_modal:
             db,sy,sx,score,residual_details=residual_translation(da,db,a,b)

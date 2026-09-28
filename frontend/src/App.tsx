@@ -193,7 +193,7 @@ export default function App() {
     const checkClusterOnArrival = async () => {
       try {
         const healthUrl = API_BASE ? `${API_BASE}/health` : "/health";
-        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
+        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(20000) });
         if (res.ok) {
           const data = await res.json().catch(() => null);
           if (data && (data.status === "ok" || data.environment || data.models)) {
@@ -232,7 +232,7 @@ export default function App() {
     const interval = setInterval(async () => {
       try {
         const healthUrl = API_BASE ? `${API_BASE}/health` : "/health";
-        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
+        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(15000) });
         if (res.ok) {
           const data = await res.json().catch(() => null);
           if (data && (data.status === "ok" || data.environment || data.models)) {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Server, CheckCircle2, ShieldCheck, ArrowRight, X, Cpu, HardDrive, Radio, Sparkles } from "lucide-react";
+import { API_BASE } from "../../api";
 
 interface ClusterWakeModalProps {
   isOpen: boolean;
@@ -87,11 +88,12 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
       }
     }, 4000);
 
-    // 3. Poll /health every 2.5 seconds
+    // 3. Poll /health using API_BASE every 2.5 seconds
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch("/health", {
-          signal: AbortSignal.timeout(2800),
+        const healthUrl = API_BASE ? `${API_BASE}/health` : "/health";
+        const res = await fetch(healthUrl, {
+          signal: AbortSignal.timeout(10000),
         });
         if (res.ok) {
           const data = await res.json().catch(() => null);
