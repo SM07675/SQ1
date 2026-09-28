@@ -17,9 +17,7 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
   onExploreDemo,
 }) => {
   const [stage, setStage] = useState<"checking" | "waking" | "ready" | "error">("checking");
-  const [countdown, setCountdown] = useState(35);
-  const [statusMessage, setStatusMessage] = useState("Checking cloud node status...");
-  const [nodeCloudStatus, setNodeCloudStatus] = useState<string>("Starting");
+  const [statusMessage, setStatusMessage] = useState("Checking Google Cloud Run...");
   const [currentStep, setCurrentStep] = useState<number>(1);
 
   // Handle escape key
@@ -36,60 +34,12 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
     if (!isOpen) return;
 
     let isMounted = true;
+    let completed = false;
     setStage("waking");
-    setStatusMessage("Sending wake signal to E2E 16 GB Node...");
-    setCountdown(35);
+    setStatusMessage("Waiting for Google Cloud Run to respond...");
     setCurrentStep(1);
-
-    // 1. Dispatch Wake call to Vercel Serverless Function / E2E API
-    const triggerWake = async () => {
-      try {
-        const res = await fetch("/e2e/wake", { method: "POST" }).catch(() =>
-          fetch("/api/e2e?action=wake", { method: "POST" })
-        );
-        if (res && res.ok) {
-          const data = await res.json().catch(() => null);
-          if (isMounted) {
-            setCurrentStep(2);
-            if (data?.message?.includes("already running")) {
-              setStatusMessage("Node is already active! Booting models into RAM...");
-              setNodeCloudStatus("Running");
-            } else {
-              setStatusMessage("Power-on signal received by E2E Cloud. Booting Linux instance...");
-              setNodeCloudStatus("Starting");
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Auto-wake dispatch error:", err);
-      }
-    };
-
-    triggerWake();
-
-    // 2. Poll /e2e/status to track cloud VM state
-    const statusPollInterval = setInterval(async () => {
-      try {
-        const res = await fetch("/e2e/status").catch(() =>
-          fetch("/api/e2e?action=status")
-        );
-        if (res && res.ok) {
-          const data = await res.json().catch(() => null);
-          if (isMounted && data?.status) {
-            setNodeCloudStatus(data.status);
-            if (data.status === "Running" && currentStep < 3) {
-              setCurrentStep(3);
-              setStatusMessage("Compute node is live! Initializing Docker & loading 11 models into RAM...");
-            }
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }, 4000);
-
-    // 3. Poll /health using API_BASE every 2.5 seconds
-    const pollInterval = setInterval(async () => {
+    // Cloud Run starts on demand. The health endpoint is the source of truth.
+    const checkHealth = async () => {
       try {
         const healthUrl = API_BASE ? `${API_BASE}/health` : "/health";
         const res = await fetch(healthUrl, {
@@ -97,57 +47,37 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
         });
         if (res.ok) {
           const data = await res.json().catch(() => null);
-          if (data && (data.status === "ok" || data.environment || data.models)) {
-            clearInterval(pollInterval);
-            clearInterval(statusPollInterval);
+          if (!completed && data && (data.status === "ok" || data.environment || data.models)) {
             if (isMounted) {
+              completed = true;
               setCurrentStep(4);
               setStage("ready");
-              setCountdown(0);
-              setStatusMessage("All 11 Geospatial Vision Models loaded into RAM! System Ready.");
+              setStatusMessage("The analysis service is responding.");
               setTimeout(() => {
-                onClusterReady();
-                onClose();
+                if (isMounted) {
+                  onClusterReady();
+                  onClose();
+                }
               }, 1200);
             }
           }
         }
       } catch {
-        // Still booting, keep polling
+        if (isMounted) setStatusMessage("The analysis service is still starting or temporarily unavailable.");
       }
-    }, 2500);
-
-    // 4. Countdown timer & step advancement
-    const timerInterval = setInterval(() => {
-      setCountdown((prev) => {
-        const next = prev > 0 ? prev - 1 : 0;
-        if (isMounted) {
-          if (next <= 22 && next > 10 && currentStep < 3) {
-            setCurrentStep(3);
-            setStatusMessage("Starting Docker container & mounting neural model registry...");
-          } else if (next <= 10 && next > 0 && currentStep < 4) {
-            setCurrentStep(3);
-            setStatusMessage("Loading PyTorch runtime & 11 Geospatial Vision Models into RAM...");
-          }
-        }
-        return next;
-      });
-    }, 1000);
+    };
+    void checkHealth();
+    const pollInterval = setInterval(checkHealth, 5000);
 
     return () => {
       isMounted = false;
       clearInterval(pollInterval);
-      clearInterval(statusPollInterval);
-      clearInterval(timerInterval);
     };
   }, [isOpen, onClusterReady, onClose]);
 
   if (!isOpen) return null;
 
-  const progressPercent =
-    stage === "ready"
-      ? 100
-      : Math.min(95, Math.max(12, Math.round(((35 - countdown) / 35) * 100)));
+  const progressPercent = stage === "ready" ? 100 : 20;
 
   return (
     <div
@@ -189,16 +119,16 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
               <h3 id="cluster-wake-heading" className="cluster-wake-title">
                 {stage === "ready"
                   ? "SatQuery AI System Ready"
-                  : "Waiting for system to start..."}
+                  : "Checking analysis service..."}
               </h3>
               <span className={`cluster-wake-scale-tag ${stage === "ready" ? "ready" : ""}`}>
-                {stage === "ready" ? "Online" : "Starting Up"}
+                {stage === "ready" ? "Online" : "Checking"}
               </span>
             </div>
             <p className="cluster-wake-subtitle">
               {stage === "ready"
-                ? "All 11 Models Loaded · Ready for satellite query"
-                : "Waking E2E Networks Node C3-16GB-578 (Chennai, India)"}
+                ? "Cloud Run health check passed · Ready for your query"
+                : "Connecting to Google Cloud Run"}
             </p>
           </div>
         </div>
@@ -210,8 +140,8 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
               {currentStep > 1 || stage === "ready" ? <CheckCircle2 size={12} /> : "1"}
             </div>
             <div className="cluster-step-label">
-              <span>Wake Command</span>
-              <small>E2E Cloud API</small>
+              <span>Connect</span>
+              <small>Cloud Run</small>
             </div>
           </div>
 
@@ -220,8 +150,8 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
               {currentStep > 2 || stage === "ready" ? <CheckCircle2 size={12} /> : "2"}
             </div>
             <div className="cluster-step-label">
-              <span>Linux Instance</span>
-              <small>{nodeCloudStatus === "Running" ? "Running" : "Booting"}</small>
+              <span>Health Check</span>
+              <small>Service response</small>
             </div>
           </div>
 
@@ -230,8 +160,8 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
               {currentStep > 3 || stage === "ready" ? <CheckCircle2 size={12} /> : "3"}
             </div>
             <div className="cluster-step-label">
-              <span>11 Models in RAM</span>
-              <small>PyTorch & GDAL</small>
+              <span>Analysis API</span>
+              <small>Availability</small>
             </div>
           </div>
 
@@ -240,8 +170,8 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
               {stage === "ready" ? <CheckCircle2 size={12} /> : "4"}
             </div>
             <div className="cluster-step-label">
-              <span>Inference Ready</span>
-              <small>FastAPI /health</small>
+              <span>Ready</span>
+              <small>Continue analysis</small>
             </div>
           </div>
         </div>
@@ -250,7 +180,7 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
         <div className="cluster-wake-info-box">
           <div className="cluster-wake-info-badge">
             <ShieldCheck size={14} />
-            <span>Energy-Saving Architecture Active</span>
+            <span>Automatic Cloud Scaling</span>
           </div>
           {stage === "ready" ? (
             <span style={{ color: "#34d399", fontWeight: 550 }}>
@@ -258,7 +188,7 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
             </span>
           ) : (
             <span>
-              This node automatically shuts down when idle to conserve compute resources. We are spinning it up now with all 11 geospatial vision models ready in memory.
+              Cloud Run starts instances when needed. This check verifies that the analysis API is responding.
             </span>
           )}
         </div>
@@ -276,9 +206,6 @@ export const ClusterWakeModal: React.FC<ClusterWakeModalProps> = ({
                 statusMessage
               )}
             </span>
-            {stage !== "ready" && (
-              <span className="cluster-wake-countdown">~{countdown}s remaining</span>
-            )}
           </div>
 
           {/* Progress bar */}

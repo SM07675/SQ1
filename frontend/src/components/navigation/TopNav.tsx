@@ -29,7 +29,6 @@ interface TopNavProps {
   clusterOnline?: boolean;
   clusterState?: "online" | "starting" | "standby";
   onToggleClusterPower?: () => void;
-  autoSleepSecondsRemaining?: number;
   authUser?: AuthUser | null;
   onLogout?: () => void;
 }
@@ -47,7 +46,6 @@ export const TopNav: React.FC<TopNavProps> = ({
   clusterOnline = true,
   clusterState = "online",
   onToggleClusterPower,
-  autoSleepSecondsRemaining,
   authUser,
   onLogout,
 }) => {
@@ -203,12 +201,10 @@ export const TopNav: React.FC<TopNavProps> = ({
             className={`cluster-power-pill ${clusterState || (clusterOnline ? "online" : "standby")}`}
             title={
               clusterState === "starting"
-                ? "Google Cloud Run is Starting... (Click to view live progress)"
+                ? "Checking Google Cloud Run health"
                 : clusterOnline
-                ? autoSleepSecondsRemaining !== undefined
-                  ? `Google Cloud Run (8 vCPU · 16GB) · Scale-to-Zero Active (${Math.floor(autoSleepSecondsRemaining / 60)}m ${autoSleepSecondsRemaining % 60}s idle timer). ₹0 credit burn.`
-                  : "Google Cloud Run (8 vCPU · 16GB) Online · Scale-to-Zero Active"
-                : "Cloud Run is in Standby (Click to wake up)"
+                ? "Google Cloud Run is responding; automatic scaling is enabled"
+                : "Google Cloud Run is unavailable; click to retry"
             }
             aria-label={
               clusterState === "starting"
@@ -223,12 +219,8 @@ export const TopNav: React.FC<TopNavProps> = ({
               {clusterState === "starting"
                 ? "Starting..."
                 : clusterOnline
-                ? autoSleepSecondsRemaining !== undefined
-                  ? autoSleepSecondsRemaining <= 60
-                    ? `GCP 8vCPU · ${autoSleepSecondsRemaining}s`
-                    : `GCP 8vCPU · ${Math.ceil(autoSleepSecondsRemaining / 60)}m`
-                  : "GCP 8vCPU Online"
-                : "Standby"}
+                ? "Cloud Run Online"
+                : "Retry Connection"}
             </span>
           </button>
         )}

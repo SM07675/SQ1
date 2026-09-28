@@ -140,17 +140,16 @@ export default function App() {
   const suppressHashChangeRef = useRef(false);
 
   // Cluster Scale-to-Zero State
-  const IDLE_TIMEOUT_SECONDS = 10 * 60; // 10 minutes auto-shutdown timeout
   const [isWakeModalOpen, setIsWakeModalOpen] = useState(false);
   const [clusterOnline, setClusterOnline] = useState(false);
   const [clusterState, setClusterState] = useState<"online" | "starting" | "standby">("starting");
-  const [autoSleepSecondsRemaining, setAutoSleepSecondsRemaining] = useState<number>(IDLE_TIMEOUT_SECONDS);
   const [autoFocusTrigger, setAutoFocusTrigger] = useState(0);
   const [pendingMessage, setPendingMessage] = useState<{
     query: string;
     pairType: string;
     files: File[];
   } | null>(null);
+  const closeWakeModal = useCallback(() => setIsWakeModalOpen(false), []);
 
   // Focus query input helper
   const triggerFocusQueryInput = useCallback(() => {
@@ -172,7 +171,7 @@ export default function App() {
     setClusterOnline(true);
     setClusterState("online");
     setIsWakeModalOpen(false);
-    addToast("success", "🛰️ AI Node C3-16GB-578 is Online & Ready! Enter your query below.");
+    addToast("success", "The analysis service is ready. Enter your query below.");
     refreshRuns();
     refreshChatsList();
 
@@ -248,92 +247,9 @@ export default function App() {
     return () => clearInterval(interval);
   }, [clusterOnline, handleClusterReady]);
 
-  // ── Auto-Shutdown Inactivity Watchdog (10 Minutes) ──────────────────────────
-  // Automatically puts E2E node to sleep if no user activity for 10 minutes
-  useEffect(() => {
-    const LAST_ACTIVE_KEY = "satquery_last_active_time";
-    if (!localStorage.getItem(LAST_ACTIVE_KEY)) {
-      localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
-    }
-
-    let lastThrottle = 0;
-    const markActive = () => {
-      localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
-    };
-
-    const handleMouseMove = () => {
-      const now = Date.now();
-      // Throttle mouse moves to avoid constant resetting from ambient trackpad jitter
-      if (now - lastThrottle > 10000) {
-        lastThrottle = now;
-        markActive();
-      }
-    };
-
-    window.addEventListener("click", markActive, { passive: true });
-    window.addEventListener("keydown", markActive, { passive: true });
-    window.addEventListener("touchstart", markActive, { passive: true });
-    window.addEventListener("scroll", markActive, { passive: true });
-    window.addEventListener("mousemove", handleMouseMove, { passive: true });
-
-    let warned60s = false;
-
-    const interval = setInterval(async () => {
-      if (!clusterOnline) {
-        setAutoSleepSecondsRemaining(IDLE_TIMEOUT_SECONDS);
-        warned60s = false;
-        return;
-      }
-
-      const lastActive = Number(localStorage.getItem(LAST_ACTIVE_KEY) || Date.now());
-      const elapsedSec = Math.floor((Date.now() - lastActive) / 1000);
-      const remainingSec = Math.max(0, IDLE_TIMEOUT_SECONDS - elapsedSec);
-
-      setAutoSleepSecondsRemaining(remainingSec);
-
-      // 60-second advance notice toast
-      if (remainingSec <= 60 && remainingSec > 50 && !warned60s) {
-        warned60s = true;
-        addToast("info", "⏳ Eco Notice: SatQuery AI Node will auto-sleep in 60s to protect cloud credits. Click anywhere to stay active.");
-      } else if (remainingSec > 60) {
-        warned60s = false;
-      }
-
-      // 10-Minute Timeout Reached: Trigger Sleep
-      if (remainingSec <= 0) {
-        console.log("[SatQuery Eco] 10 min idle reached. Putting AI node to sleep...");
-        try {
-          await fetch("/e2e/sleep", { method: "POST" });
-          setClusterOnline(false);
-          setClusterState("standby");
-          addToast("info", "💤 SatQuery AI Node entered auto-sleep after 10 min of inactivity (₹0.00 credit burn).");
-        } catch (err) {
-          console.warn("Auto-sleep error:", err);
-        }
-      }
-    }, 1000);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("click", markActive);
-      window.removeEventListener("keydown", markActive);
-      window.removeEventListener("touchstart", markActive);
-      window.removeEventListener("scroll", markActive);
-      window.removeEventListener("mousemove", handleMouseMove);
-    };
-  }, [clusterOnline]);
-
-  const handleToggleClusterPower = async () => {
+  const handleToggleClusterPower = () => {
     if (clusterOnline) {
-      try {
-        addToast("info", "Putting AI cluster to sleep to save credits...");
-        await fetch("/e2e/sleep", { method: "POST" });
-        setClusterOnline(false);
-        setClusterState("standby");
-        addToast("success", "💤 AI Node is now in sleep mode (₹0 credit burn).");
-      } catch (err) {
-        addToast("error", "Failed to power down node: " + String(err));
-      }
+      addToast("info", "Google Cloud Run is responding. It scales automatically when idle.");
     } else {
       setClusterState("starting");
       setIsWakeModalOpen(true);
@@ -702,7 +618,6 @@ export default function App() {
         clusterOnline={clusterOnline}
         clusterState={clusterState}
         onToggleClusterPower={handleToggleClusterPower}
-        autoSleepSecondsRemaining={autoSleepSecondsRemaining}
         authUser={authUser}
         onLogout={handleLogout}
       />
@@ -719,7 +634,7 @@ export default function App() {
           <div className="cluster-starting-banner-inner">
             <span className="cluster-starting-beacon" />
             <span className="cluster-starting-msg">
-              Waiting for system to start... (E2E Node C3-16GB-578 · Loading PyTorch &amp; 11 Models)
+              Waiting for Google Cloud Run to respond...
             </span>
             <span className="cluster-starting-cta">View Live Progress &rarr;</span>
           </div>
@@ -896,7 +811,7 @@ export default function App() {
 
       <ClusterWakeModal
         isOpen={isWakeModalOpen}
-        onClose={() => setIsWakeModalOpen(false)}
+        onClose={closeWakeModal}
         onClusterReady={handleClusterReady}
         onExploreDemo={() => {
           setActiveTab("explore");

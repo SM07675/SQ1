@@ -266,7 +266,7 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
               title="Click to view node startup progress"
             >
               <span className="home-cluster-starting-dot" />
-              <span>Waiting for system to start... (E2E Node C3-16GB-578)</span>
+              <span>Waiting for the analysis service to respond...</span>
               <span className="home-cluster-view-btn">View Live Status &rarr;</span>
             </div>
           )}
