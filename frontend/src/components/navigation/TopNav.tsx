@@ -203,18 +203,18 @@ export const TopNav: React.FC<TopNavProps> = ({
             className={`cluster-power-pill ${clusterState || (clusterOnline ? "online" : "standby")}`}
             title={
               clusterState === "starting"
-                ? "AI Node is Starting... (Click to view live progress)"
+                ? "Google Cloud Run is Starting... (Click to view live progress)"
                 : clusterOnline
                 ? autoSleepSecondsRemaining !== undefined
-                  ? `Cluster Online · Auto-sleeps after 10m idle (${Math.floor(autoSleepSecondsRemaining / 60)}m ${autoSleepSecondsRemaining % 60}s remaining). Click to sleep now.`
-                  : "Cluster is Online (Click to sleep & save credits)"
-                : "Cluster is in Standby (Click to wake up)"
+                  ? `Google Cloud Run (8 vCPU · 16GB) · Scale-to-Zero Active (${Math.floor(autoSleepSecondsRemaining / 60)}m ${autoSleepSecondsRemaining % 60}s idle timer). ₹0 credit burn.`
+                  : "Google Cloud Run (8 vCPU · 16GB) Online · Scale-to-Zero Active"
+                : "Cloud Run is in Standby (Click to wake up)"
             }
             aria-label={
               clusterState === "starting"
                 ? "Cluster is Starting"
                 : clusterOnline
-                ? "Cluster is Online"
+                ? "Google Cloud Run is Online"
                 : "Cluster is in Standby"
             }
           >
@@ -225,9 +225,9 @@ export const TopNav: React.FC<TopNavProps> = ({
                 : clusterOnline
                 ? autoSleepSecondsRemaining !== undefined
                   ? autoSleepSecondsRemaining <= 60
-                    ? `16GB Online · ${autoSleepSecondsRemaining}s`
-                    : `16GB Online · ${Math.ceil(autoSleepSecondsRemaining / 60)}m`
-                  : "16GB Online"
+                    ? `GCP 8vCPU · ${autoSleepSecondsRemaining}s`
+                    : `GCP 8vCPU · ${Math.ceil(autoSleepSecondsRemaining / 60)}m`
+                  : "GCP 8vCPU Online"
                 : "Standby"}
             </span>
           </button>
