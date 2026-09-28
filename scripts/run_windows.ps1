@@ -3,11 +3,11 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $Backend = Join-Path $ProjectRoot "backend"
 $Frontend = Join-Path $ProjectRoot "frontend"
 
-function Test-SatQueryPython([string]$Path) {
+function Test-SatQueryPython([string]$Path, [string]$WorkDir = $Backend) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
-    Push-Location $Backend
+    Push-Location $WorkDir
     try {
-        & $Path -c "import fastapi, rasterio, torch, transformers, onnxruntime, cv2, app.main, app.services.orchestrator" 2>$null
+        & $Path -c "import fastapi, rasterio, torch, onnxruntime, cv2, app.main" 2>$null
         return $LASTEXITCODE -eq 0
     } catch {
         return $false
@@ -27,7 +27,7 @@ $Drive = "${DriveLetter}:"
 subst $Drive $ProjectRoot
 try {
     $ProjectPython = "$Drive\backend\.venv-integrated\Scripts\python.exe"
-    if (-not (Test-SatQueryPython $ProjectPython)) {
+    if (-not (Test-SatQueryPython $ProjectPython "$Drive\backend")) {
         throw "No working SatQuery Python runtime found. Run scripts\setup_windows.ps1 first."
     }
 } finally {
