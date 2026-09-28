@@ -198,8 +198,8 @@ def write_pdf_report(output_dir: Path, payload):
     # ── Page 2: Main annotated image ─────────────────────────────────
     page(2, "Annotated Satellite Image")
     story.append(p(
-        "The image below shows the analysis results overlaid on your satellite image. "
-        "Different colors represent different types of land, water, and structures."
+        "The image below shows the available analysis overlay on the uploaded image. "
+        "The measured classes and their colors are listed below when land-cover classification was performed."
     ))
     story.append(Spacer(1, 8))
     if overlays:
@@ -210,19 +210,16 @@ def write_pdf_report(output_dir: Path, payload):
     else:
         story.append(p("No image artifact was available for this request."))
 
-    # Color legend
-    heading("Color Legend")
+    land_breakdown = payload.get("statistics", {}).get("land_cover", {}).get("breakdown", {})
     legend_rows = [
-        ("Deep Blue", "Water bodies (rivers, lakes, ponds)"),
-        ("Bright Green", "Grass and vegetation"),
-        ("Dark Green", "Forest and woodland"),
-        ("Warm Red", "Buildings and structures"),
-        ("Bright Yellow", "Roads"),
-        ("Dark Yellow/Sandy", "Unclassified area"),
-        ("Tan/Brown", "Bare soil"),
-        ("Light Olive", "Agricultural fields"),
+        (f'{name.replace("_", " ").title()} ({values["color"]})',
+         f'{values["pixels"]:,} pixels ({values["percent"]:.2f}% of valid pixels)')
+        for name, values in land_breakdown.items()
+        if values.get("pixels", 0) > 0 and values.get("color")
     ]
-    table(legend_rows)
+    if legend_rows:
+        heading("Measured Class Colors")
+        table(legend_rows)
 
     # ── Page 3: Key measurements ─────────────────────────────────────
     page(3, "Key Measurements")
