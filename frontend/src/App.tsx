@@ -8,6 +8,7 @@ import {
   sendChatMessage,
   fetchSpatialRuns,
   fetchResultById,
+  API_BASE,
 } from "./api";
 import type {
   ChatSummary,
@@ -191,7 +192,8 @@ export default function App() {
     let active = true;
     const checkClusterOnArrival = async () => {
       try {
-        const res = await fetch("/health", { signal: AbortSignal.timeout(2600) });
+        const healthUrl = API_BASE ? `${API_BASE}/health` : "/health";
+        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
         if (res.ok) {
           const data = await res.json().catch(() => null);
           if (data && (data.status === "ok" || data.environment || data.models)) {
@@ -229,7 +231,8 @@ export default function App() {
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch("/health", { signal: AbortSignal.timeout(2800) });
+        const healthUrl = API_BASE ? `${API_BASE}/health` : "/health";
+        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(5000) });
         if (res.ok) {
           const data = await res.json().catch(() => null);
           if (data && (data.status === "ok" || data.environment || data.models)) {
