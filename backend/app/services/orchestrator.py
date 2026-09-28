@@ -307,22 +307,22 @@ def build_analysis_summary(
     if lc_ev:
         m = lc_ev.metrics
         dom_class = str(m.get("dominant_class", "land")).replace("_", " ").title()
-        dom_pct = round(float(m.get("breakdown", {}).get(m.get("dominant_class", ""), {}).get("percent", 0.0)))
-        veg_pct = round(float(m.get("vegetation_percent", 0.0)))
-        built_pct = round(float(m.get("built_up_percent", 0.0)))
-        water_pct = round(float(m.get("water_percent", 0.0)))
+        dom_pct = float(m.get("breakdown", {}).get(m.get("dominant_class", ""), {}).get("percent", 0.0))
+        veg_pct = float(m.get("vegetation_percent", 0.0))
+        built_pct = float(m.get("built_up_percent", 0.0))
+        water_pct = float(m.get("water_percent", 0.0))
         area_m2 = m.get("area_m2")
         area_str = format_human_area(area_m2) if (has_crs and area_m2) else "100% of scene"
 
         title = "LAND COVER SUMMARY"
-        headline = f"Scene is predominantly {dom_class.lower()} ({dom_pct}%), with {veg_pct}% vegetation and {built_pct}% built-up land."
-        explanation = f"Approximately {dom_pct}% of the analyzed image consists of {dom_class.lower()}. Natural vegetation canopy covers {veg_pct}%, human infrastructure covers {built_pct}%, and open water accounts for {water_pct}%."
+        headline = f"Estimated land cover: {dom_class.lower()} {dom_pct:.2f}%, vegetation {veg_pct:.2f}%, built-up {built_pct:.2f}%."
+        explanation = f"Percentages are model estimates over valid analyzed pixels. {dom_class} covers {dom_pct:.2f}%, vegetation {veg_pct:.2f}%, built-up land {built_pct:.2f}%, and water {water_pct:.2f}%."
 
         metrics = [
-            SummaryMetric(label="Dominant Land", value=f"{dom_class} ({dom_pct}%)", icon="🏞️"),
-            SummaryMetric(label="Vegetation", value=f"{veg_pct}%", icon="🌿"),
-            SummaryMetric(label="Built-up Area", value=f"{built_pct}%", icon="🏢"),
-            SummaryMetric(label="Water Coverage", value=f"{water_pct}%", icon="💧"),
+            SummaryMetric(label="Dominant Land", value=f"{dom_class} ({dom_pct:.2f}%)", icon="🏞️"),
+            SummaryMetric(label="Vegetation", value=f"{veg_pct:.2f}%", icon="🌿"),
+            SummaryMetric(label="Built-up Area", value=f"{built_pct:.2f}%", icon="🏢"),
+            SummaryMetric(label="Water Coverage", value=f"{water_pct:.2f}%", icon="💧"),
             SummaryMetric(label="Confidence", value=f"{conf_pct}%", icon="✓"),
         ]
         return (
@@ -1422,6 +1422,8 @@ async def analyze(
                         "target": land_cover_res.get("target", "land_cover"),
                         "dominant_class": land_cover_res["dominant_class"],
                         "breakdown": land_cover_res["breakdown"],
+                        "valid_pixel_count": land_cover_res.get("valid_pixel_count"),
+                        "analysis_pixel_count": land_cover_res.get("analysis_pixel_count"),
                         "land_coverage_percent": land_cover_res.get("land_coverage_percent"),
                         "land_area_m2": land_cover_res.get("land_area_m2"),
                         "land_area_ha": land_cover_res.get("land_area_ha"),

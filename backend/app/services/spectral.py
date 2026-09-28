@@ -1128,7 +1128,14 @@ def classify_land_cover_scene(
 
     # 0. Attempt Deep Learning Land-Cover Model (satquery_landcover_v1, smp.Unet/mit_b2)
     is_supported_image = image_path.suffix.lower() in (".tif", ".tiff", ".nc", ".geotiff", ".png", ".jpg", ".jpeg")
-    if is_supported_image:
+    with rasterio.open(image_path) as source:
+        source_bands = _canonical_band_map(source)
+        # The RGB model was trained on high-resolution optical RGB. Multispectral
+        # scenes require the spectral path so NIR/SWIR are interpreted as bands.
+        rgb_model_compatible = source.count in (3, 4) and not any(
+            band in source_bands for band in ("nir", "swir", "vv", "vh")
+        )
+    if is_supported_image and rgb_model_compatible:
         try:
             from app.services.landcover_model import is_landcover_model_available, predict_landcover_mask
             if is_landcover_model_available():
@@ -1146,6 +1153,7 @@ def classify_land_cover_scene(
         out_h = max(1, round(src.height * ratio))
         transform = src.transform * Affine.scale(src.width / out_w, src.height / out_h)
         crs = src.crs
+        valid = src.dataset_mask(out_shape=(out_h, out_w), resampling=Resampling.nearest) > 0
 
         has_nir = "nir" in band_map
         has_red = "red" in band_map
@@ -1172,10 +1180,31 @@ def classify_land_cover_scene(
         else:
             swir = None
 
+    valid &= np.isfinite(r) & np.isfinite(g) & np.isfinite(b)
+    if nir is not None:
+        valid &= np.isfinite(nir)
+    if swir is not None:
+        valid &= np.isfinite(swir)
+    valid_pixels = int(valid.sum())
+    if valid_pixels == 0:
+        raise ValueError("Land-cover analysis requires at least one valid raster pixel")
+    r = np.where(valid, r, 0)
+    g = np.where(valid, g, 0)
+    b = np.where(valid, b, 0)
+    if nir is not None:
+        nir = np.where(valid, nir, 0)
+    if swir is not None:
+        swir = np.where(valid, swir, 0)
+
     # Compute Normalized Bands
-    r_norm = (r - r.min()) / max(r.max() - r.min(), 1e-5)
-    g_norm = (g - g.min()) / max(g.max() - g.min(), 1e-5)
-    b_norm = (b - b.min()) / max(b.max() - b.min(), 1e-5)
+    def _valid_normalize(channel: np.ndarray) -> np.ndarray:
+        values = channel[valid]
+        lo, hi = float(values.min()), float(values.max())
+        return np.where(valid, (channel - lo) / max(hi - lo, 1e-5), 0)
+
+    r_norm = _valid_normalize(r)
+    g_norm = _valid_normalize(g)
+    b_norm = _valid_normalize(b)
     brightness = 0.299 * r_norm + 0.587 * g_norm + 0.114 * b_norm
 
     # Urban Edge Suppression
@@ -1199,7 +1228,7 @@ def classify_land_cover_scene(
     else:
         ndbi = np.clip((r_norm - g_norm) + (brightness - 0.5) + edge_density * 0.5, -1.0, 1.0)
 
-    total_pixels = out_h * out_w
+    total_pixels = valid_pixels
 
     # 1. Water mask with strict shadow, vegetation, grass & dark soil suppression
     # Prevents shadows and vegetation from being falsely detected as water
@@ -1231,12 +1260,13 @@ def classify_land_cover_scene(
         w_keep = w_sizes >= 30
         w_keep[0] = False
         water_mask = w_keep[w_labels]
+    water_mask &= valid
 
     # 2. Forest / Dense canopy (dark green)
-    forest_mask = _denoise((ndvi >= 0.38) & ~water_mask)
+    forest_mask = _denoise((ndvi >= 0.38) & ~water_mask & valid) & valid
 
     # 3. Grass / General Vegetation (bright green)
-    veg_mask = _denoise((ndvi >= 0.16) & ~forest_mask & ~water_mask)
+    veg_mask = _denoise((ndvi >= 0.16) & ~forest_mask & ~water_mask & valid) & valid
 
     # 4. Road / Impervious surface (bright yellow)
     # Neutral spectral balance, low NDVI, asphalt/pavement brightness
@@ -1248,22 +1278,22 @@ def classify_land_cover_scene(
         (brightness <= 0.68) &
         ~water_mask & ~forest_mask & ~veg_mask
     )
-    road_mask = _denoise(road_candidate & (edge_density > 0.06))
+    road_mask = _denoise(road_candidate & (edge_density > 0.06) & valid) & valid
 
     # 5. Built-up / Urban footprint (warm red)
     builtup_mask = _denoise(
         ((ndbi >= 0.06) | (edge_density > 0.12) | ((brightness > 0.55) & (ndvi < 0.15))) &
-        ~water_mask & ~forest_mask & ~veg_mask & ~road_mask
-    )
+        ~water_mask & ~forest_mask & ~veg_mask & ~road_mask & valid
+    ) & valid
 
     # 6. Agricultural land / Cultivated fields (light olive)
     agri_mask = _denoise(
         ((ndvi >= 0.08) & (ndvi < 0.28) & (r_norm > 0.18)) &
-        ~water_mask & ~forest_mask & ~veg_mask & ~builtup_mask & ~road_mask
-    )
+        ~water_mask & ~forest_mask & ~veg_mask & ~builtup_mask & ~road_mask & valid
+    ) & valid
 
     # 7. Bare land / Soil (dark yellow land color)
-    bare_mask = ~water_mask & ~forest_mask & ~veg_mask & ~builtup_mask & ~agri_mask & ~road_mask
+    bare_mask = valid & ~water_mask & ~forest_mask & ~veg_mask & ~builtup_mask & ~agri_mask & ~road_mask
 
     # Calculate percentages
     water_pct = round(float(water_mask.sum() / total_pixels * 100), 2)
@@ -1291,7 +1321,7 @@ def classify_land_cover_scene(
     # Road: Bright Yellow (#f5c81e), Bare Land: Dark Yellow (#c29b38), Built-up: Red (#dc3545)
     breakdown = {
         "water": {"percent": water_pct, "status": _qualitative(water_pct), "color": "#143c8c"},
-        "vegetation": {"percent": total_veg_pct, "status": _qualitative(total_veg_pct), "color": "#22c55e"},
+        "vegetation": {"percent": veg_pct, "status": _qualitative(veg_pct), "color": "#22c55e"},
         "forest": {"percent": forest_pct, "status": _qualitative(forest_pct), "color": "#166534"},
         "road": {"percent": road_pct, "status": _qualitative(road_pct), "color": "#f5c81e"},
         "agricultural": {"percent": agri_pct, "status": _qualitative(agri_pct), "color": "#7cb342"},
@@ -1450,6 +1480,8 @@ def classify_land_cover_scene(
         "summary": summary_text,
         "confidence": 0.90,
         "breakdown": breakdown,
+        "valid_pixel_count": valid_pixels,
+        "analysis_pixel_count": out_h * out_w,
         "dominant_class": dominant_class[0],
         "mask_path": selected_mask,
         "grounding_mask_path": selected_grounding,

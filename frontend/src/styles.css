@@ -1886,10 +1886,16 @@ body {
 }
 
 .user-attachments-row {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   margin-bottom: 10px;
-  flex-wrap: wrap;
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.user-attachments-row.is-pair {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .user-att-chip {
@@ -1916,18 +1922,18 @@ body {
 
 .user-attached-image-preview {
   width: 100%;
-  max-width: 420px;
+  min-width: 0;
   border-radius: 12px;
   overflow: hidden;
-  margin-top: 10px;
   position: relative;
   cursor: pointer;
+  background: rgba(15, 23, 42, 0.08);
 }
 
 .user-attached-image-preview img {
   width: 100%;
-  height: 120px;
-  object-fit: cover;
+  height: clamp(150px, 24vw, 260px);
+  object-fit: contain;
   display: block;
 }
 
@@ -1987,7 +1993,7 @@ body {
 
 .tiff-preview-fallback {
   width: 100%;
-  max-width: 420px;
+  min-width: 0;
   padding: 10px 14px;
   border-radius: 10px;
   background: rgba(15, 23, 42, 0.6);
@@ -3132,13 +3138,14 @@ body {
 /* Dual upload */
 .dual-upload-zone {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-6);
   margin-bottom: var(--space-8);
   position: relative;
 }
 
 .image-slot {
+  min-width: 0;
   background: var(--glass-medium);
   backdrop-filter: var(--blur-card);
   -webkit-backdrop-filter: var(--blur-card);
@@ -3185,9 +3192,10 @@ body {
 
 .slot-img-preview {
   width: 100%;
-  max-height: 200px;
+  height: clamp(180px, 25vw, 300px);
   object-fit: contain;
   border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.08);
 }
 
 .slot-fallback-icon {
@@ -12865,6 +12873,27 @@ img {
   height: 16px;
   accent-color: var(--blue-main);
   cursor: pointer;
+}
+
+/* Keep source images readable and aligned in chat and comparison at every width. */
+.user-attachments-row.is-pair,
+.dual-upload-zone {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.user-attached-image-preview img {
+  height: clamp(150px, 24vw, 260px);
+  max-height: none;
+  object-fit: contain;
+}
+
+@media (max-width: 600px) {
+  .dual-upload-zone { gap: 8px; }
+  .image-slot { padding: 44px 8px 12px; min-height: 190px; }
+  .slot-badge { left: 6px; right: 6px; padding: 4px 5px; font-size: 9px; }
+  .slot-file-meta { flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+  .user-attachments-row.is-pair { gap: 6px; }
+  .user-attached-image-preview img { height: 160px; }
 }
 
 

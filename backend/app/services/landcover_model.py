@@ -36,7 +36,7 @@ import torchvision.models as tv_models
 from torchvision.ops import FeaturePyramidNetwork
 
 from app.config import settings
-from app.services.spectral import _polygonize, _write_mask, _describe_region_location
+from app.services.spectral import _canonical_band_map, _polygonize, _write_mask, _describe_region_location
 
 logger = logging.getLogger(__name__)
 
@@ -350,9 +350,9 @@ def _load_rgb_image(src_path: Path, max_size: int = 1024) -> tuple[np.ndarray, A
         transform = src.transform * Affine.scale(w0 / out_w, h0 / out_h)
 
         if src.count >= 3:
-            r = src.read(1, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
-            g = src.read(2, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
-            b = src.read(3, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
+            band_map = _canonical_band_map(src)
+            indexes = [band_map[k] for k in ("red", "green", "blue")] if all(k in band_map for k in ("red", "green", "blue")) else [1, 2, 3]
+            r, g, b = [src.read(index, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32") for index in indexes]
         else:
             ch = src.read(1, out_shape=(out_h, out_w), resampling=Resampling.bilinear).astype("float32")
             r = g = b = ch
@@ -520,7 +520,7 @@ def _render_landcover_visuals(
 
     # Optional fine-class specialist: Forest canopy (deciduous + coniferous)
     if fine_argmax is not None:
-        forest_mask = (fine_argmax == 5) | (fine_argmax == 6)
+        forest_mask = ((fine_argmax == 5) | (fine_argmax == 6)) & (canonical_classes == 2)
         if forest_mask.any():
             fgp = _create_class_grounding(forest_mask, (22, 101, 52), output_dir / "forest_dl_grounding.png")
             if fgp:
@@ -532,7 +532,7 @@ def _render_landcover_visuals(
                 class_solid_masks["forest"] = fmp
 
     # Non-built land surfaces (bare soil, pervious ground, cropland, vegetation) clearly differentiated from buildings (built-up)
-    land_mask = np.isin(canonical_classes, [2, 3, 4, 6])
+    land_mask = np.isin(canonical_classes, [1, 2, 3, 4, 6])
     land_grounding_path = output_dir / "land_dl_grounding.png"
     _create_class_grounding(land_mask, (217, 119, 6), land_grounding_path)
     try:
@@ -621,9 +621,15 @@ def predict_landcover_mask(
     y_lum = 0.299 * r_ch + 0.587 * g_ch + 0.114 * b_ch
     exg = 2.0 * g_ch - r_ch - b_ch
 
-    # 1. Black border padding / nodata margins must remain unknown (class 0), never water
-    is_nodata = (r_ch < 0.02) & (g_ch < 0.02) & (b_ch < 0.02)
-    canonical_classes[is_nodata] = 0
+    # Use the raster's declared validity mask. Dark valid water must not be
+    # discarded merely because its RGB values happen to be near black.
+    with rasterio.open(src_path) as src:
+        valid = src.dataset_mask(out_shape=(h, w), resampling=Resampling.nearest) > 0
+    valid &= np.isfinite(rgb_01).all(axis=0)
+    valid_pixels = int(valid.sum())
+    if valid_pixels == 0:
+        raise ValueError("Land-cover analysis requires at least one valid raster pixel")
+    canonical_classes[~valid] = 0
 
     # 2. Never allow grass, agricultural fields, or dark soil/land to be classified as water
     water_pixels = (canonical_classes == 5)
@@ -659,14 +665,15 @@ def predict_landcover_mask(
     tot_p = canonical_probs.sum(axis=0, keepdims=True)
     canonical_probs = np.divide(canonical_probs, tot_p, out=np.zeros_like(canonical_probs), where=tot_p > 0)
 
-    total_pixels = h * w
+    total_pixels = valid_pixels
 
     # 3. Honest per-class statistics: Image Area Fraction (%) AND Mean Model Probability
     breakdown: dict[str, dict[str, Any]] = {}
     for cls_id, name in enumerate(CANONICAL_CLASSES):
-        cnt = int((canonical_classes == cls_id).sum())
+        class_pixels = (canonical_classes == cls_id) & valid
+        cnt = int(class_pixels.sum())
         pct = round(cnt / total_pixels * 100, 2)
-        mean_p = round(float(canonical_probs[cls_id][canonical_classes == cls_id].mean()), 3) if cnt > 0 else 0.0
+        mean_p = round(float(canonical_probs[cls_id][class_pixels].mean()), 3) if cnt > 0 else 0.0
         breakdown[name] = {
             "percent": pct,
             "pixel_count": cnt,
@@ -689,11 +696,11 @@ def predict_landcover_mask(
     dominant_pct   = dominant_entry[1]["percent"]
 
     # 4. Fine sub-class metrics for natural language explanations
-    forest_pixels = int(((fine_argmax == 5) | (fine_argmax == 6)).sum())
+    forest_pixels = int((valid & (canonical_classes == 2) & ((fine_argmax == 5) | (fine_argmax == 6))).sum())
     forest_pct = round(forest_pixels / total_pixels * 100, 2)
-    herb_pixels = int((fine_argmax == 9).sum())
+    herb_pixels = int((valid & (fine_argmax == 9)).sum())
     herb_pct = round(herb_pixels / total_pixels * 100, 2)
-    brush_pixels = int((fine_argmax == 7).sum())
+    brush_pixels = int((valid & (fine_argmax == 7)).sum())
     brush_pct = round(brush_pixels / total_pixels * 100, 2)
 
     # Render visual outputs
@@ -722,7 +729,7 @@ def predict_landcover_mask(
             class_geojsons[label] = gp
 
     if forest_pixels > 0:
-        f_mask = (fine_argmax == 5) | (fine_argmax == 6)
+        f_mask = valid & ((fine_argmax == 5) | (fine_argmax == 6)) & (canonical_classes == 2)
         fgp = output_dir / "forest_dl.geojson"
         _polygonize(f_mask, transform, crs, kind="forest", output_path=fgp)
         class_geojsons["forest"] = fgp
@@ -853,6 +860,8 @@ def predict_landcover_mask(
         "confidence":         calibrated_confidence,
         "mean_pixel_confidence": round(mean_conf, 3),
         "breakdown":          breakdown,
+        "valid_pixel_count": valid_pixels,
+        "analysis_pixel_count": h * w,
         "dominant_class":     dominant_class,
         "canonical_classes":  list(CANONICAL_CLASSES),
         "mask_path":          primary_mask,

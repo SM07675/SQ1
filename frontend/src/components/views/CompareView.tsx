@@ -1,6 +1,35 @@
-import React, { useState, useRef } from "react";
-import { GitCompare, Upload, ArrowLeftRight, X, Image as ImageIcon } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { GitCompare, Upload, ArrowLeftRight, X, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Composer } from "../composer/Composer";
+import { convertTiffToDataUrl, isTiffPath } from "../../utils/tiffViewer";
+
+function useFilePreview(file: File | null): { url: string | null; loading: boolean; error: boolean } {
+  const [preview, setPreview] = useState<{ url: string | null; loading: boolean; error: boolean }>({ url: null, loading: false, error: false });
+
+  useEffect(() => {
+    if (!file) {
+      setPreview({ url: null, loading: false, error: false });
+      return;
+    }
+    let cancelled = false;
+    if (isTiffPath(file.name)) {
+      setPreview({ url: null, loading: true, error: false });
+      convertTiffToDataUrl(file, 1200)
+        .then((url) => { if (!cancelled) setPreview({ url, loading: false, error: false }); })
+        .catch(() => { if (!cancelled) setPreview({ url: null, loading: false, error: true }); });
+      return () => { cancelled = true; };
+    }
+    if (file.type.startsWith("image/") || /\.(png|jpe?g|webp)$/i.test(file.name)) {
+      const url = URL.createObjectURL(file);
+      setPreview({ url, loading: false, error: false });
+      return () => { URL.revokeObjectURL(url); };
+    }
+    setPreview({ url: null, loading: false, error: true });
+    return () => { cancelled = true; };
+  }, [file]);
+
+  return preview;
+}
 
 interface CompareViewProps {
   onSendMessage: (query: string, pairType: string, files: File[]) => Promise<void>;
@@ -13,8 +42,8 @@ export const CompareView: React.FC<CompareViewProps> = ({
 }) => {
   const [fileA, setFileA] = useState<File | null>(null);
   const [fileB, setFileB] = useState<File | null>(null);
-  const [previewA, setPreviewA] = useState<string | null>(null);
-  const [previewB, setPreviewB] = useState<string | null>(null);
+  const previewA = useFilePreview(fileA);
+  const previewB = useFilePreview(fileB);
   const [mode, setMode] = useState<"bi_temporal" | "optical_sar">("bi_temporal");
 
   const inputARef = useRef<HTMLInputElement>(null);
@@ -29,31 +58,15 @@ export const CompareView: React.FC<CompareViewProps> = ({
 
   const handleFileA = (file: File) => {
     setFileA(file);
-    if (file.type.startsWith("image/") && !file.name.endsWith(".tif")) {
-      const reader = new FileReader();
-      reader.onload = (e) => setPreviewA(e.target?.result as string);
-      reader.readAsDataURL(file);
-    } else {
-      setPreviewA(null);
-    }
   };
 
   const handleFileB = (file: File) => {
     setFileB(file);
-    if (file.type.startsWith("image/") && !file.name.endsWith(".tif")) {
-      const reader = new FileReader();
-      reader.onload = (e) => setPreviewB(e.target?.result as string);
-      reader.readAsDataURL(file);
-    } else {
-      setPreviewB(null);
-    }
   };
 
   const handleSwap = () => {
     setFileA(fileB);
     setFileB(fileA);
-    setPreviewA(previewB);
-    setPreviewB(previewA);
   };
 
   const handleSendFromCompare = async (query: string, pairType: string, extraFiles: File[]) => {
@@ -122,12 +135,12 @@ export const CompareView: React.FC<CompareViewProps> = ({
 
           {fileA ? (
             <div className="slot-preview-content">
-              {previewA ? (
-                <img src={previewA} alt={fileA.name} className="slot-img-preview" />
+              {previewA.url ? (
+                <img src={previewA.url} alt={fileA.name} className="slot-img-preview" />
               ) : (
                 <div className="slot-fallback-icon">
-                  <ImageIcon size={32} />
-                  <span>GeoTIFF / Raster</span>
+                  {previewA.loading ? <Loader2 size={32} className="animate-spin" /> : <ImageIcon size={32} />}
+                  <span>{previewA.loading ? "Rendering raster…" : previewA.error ? "Preview unavailable" : "Image preview"}</span>
                 </div>
               )}
               <div className="slot-file-meta">
@@ -140,7 +153,6 @@ export const CompareView: React.FC<CompareViewProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   setFileA(null);
-                  setPreviewA(null);
                 }}
               >
                 <X size={14} />
@@ -183,12 +195,12 @@ export const CompareView: React.FC<CompareViewProps> = ({
 
           {fileB ? (
             <div className="slot-preview-content">
-              {previewB ? (
-                <img src={previewB} alt={fileB.name} className="slot-img-preview" />
+              {previewB.url ? (
+                <img src={previewB.url} alt={fileB.name} className="slot-img-preview" />
               ) : (
                 <div className="slot-fallback-icon">
-                  <ImageIcon size={32} />
-                  <span>GeoTIFF / Raster</span>
+                  {previewB.loading ? <Loader2 size={32} className="animate-spin" /> : <ImageIcon size={32} />}
+                  <span>{previewB.loading ? "Rendering raster…" : previewB.error ? "Preview unavailable" : "Image preview"}</span>
                 </div>
               )}
               <div className="slot-file-meta">
@@ -201,7 +213,6 @@ export const CompareView: React.FC<CompareViewProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   setFileB(null);
-                  setPreviewB(null);
                 }}
               >
                 <X size={14} />

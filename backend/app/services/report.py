@@ -912,12 +912,13 @@ def write_pdf_report(output_dir: Path, payload: dict[str, Any]) -> Path:
             finding_cards.append(("Sensor Agreement", f"{cov:.1f}%", "Optical & SAR consensus"))
         except Exception:
             finding_cards.append(("Sensor Agreement", str(p_metrics["confirmed_percent"]), "Optical & SAR consensus"))
-    elif "land_cover" in p_metrics:
-        finding_cards.append(("Class Breakdown", "6 Classes", "Biophysical distribution"))
+    elif p_metrics.get("land_coverage_percent") is not None:
+        finding_cards.append(("Estimated Land", f"{float(p_metrics['land_coverage_percent']):.2f}%", "Of valid analyzed pixels"))
+        if p_metrics.get("valid_pixel_count") is not None:
+            finding_cards.append(("Valid Pixels", f"{int(p_metrics['valid_pixel_count']):,}", "Analysis grid denominator"))
 
-    finding_cards.append(("Visual Evidence", "Strong Agreement", "Verified by imagery"))
-    finding_cards.append(("Confidence", f"{conf_pct}%", conf_level_title))
-    finding_cards.append(("Evidence Status", status_label, "GeoProof verified"))
+    finding_cards.append(("Evidence Score", f"{conf_pct}%", "Not measured model accuracy"))
+    finding_cards.append(("Evidence Status", status_label, "See limitations below"))
 
     c_width = (182 * mm) / len(finding_cards)
     f_cells = []
@@ -945,6 +946,36 @@ def write_pdf_report(output_dir: Path, payload: dict[str, Any]) -> Path:
     ]))
     story.append(cards_table)
     story.append(Spacer(1, 2 * mm))
+
+    land_breakdown = p_metrics.get("breakdown")
+    if isinstance(land_breakdown, dict) and land_breakdown:
+        story.append(Paragraph("<b>LAND-COVER ESTIMATES</b>", st_h1))
+        breakdown_rows = [["Class", "Valid pixels", "Estimated share"]]
+        for class_name, values in land_breakdown.items():
+            if not isinstance(values, dict):
+                continue
+            pixels = values.get("pixel_count")
+            breakdown_rows.append([
+                str(class_name).replace("_", " ").title(),
+                f"{int(pixels):,}" if pixels is not None else "Not recorded",
+                f"{float(values.get('percent', 0)):.2f}%",
+            ])
+        if len(breakdown_rows) > 1:
+            breakdown_table = Table(breakdown_rows, colWidths=[70 * mm, 55 * mm, 57 * mm])
+            breakdown_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), C_ICE),
+                ("GRID", (0, 0), (-1, -1), 0.4, C_ICE_BORDER),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ]))
+            story.append(breakdown_table)
+            story.append(Spacer(1, 2 * mm))
+            story.append(Paragraph(
+                "Percentages use valid pixels on the analysis grid. They are model estimates, not ground-truth accuracy measurements.",
+                st_muted,
+            ))
+            story.append(Spacer(1, 2 * mm))
 
     # 6. Section 5: HOW THE EVIDENCE SUPPORTS THE ANSWER
     story.append(Paragraph("<b>5. HOW THE EVIDENCE SUPPORTS THE ANSWER</b>", st_h1))
@@ -1244,7 +1275,7 @@ def write_pdf_report(output_dir: Path, payload: dict[str, Any]) -> Path:
     models_table_rows.append([
         Paragraph("<b>GeoProof Arbiter</b><br/><font size='5.5' color='#59708D'>geoproof_arbiter_v1</font>", st_body),
         Paragraph("Evidence Verification & Calibration", st_body),
-        Paragraph(f"Final Calibrated Verdict ({conf_pct}%)", st_body),
+        Paragraph(f"Final Evidence Verdict ({conf_pct}%)", st_body),
         Paragraph(f"<font color='{status_color.hexval()}'><b>{status_label}</b></font>", st_body),
     ])
 

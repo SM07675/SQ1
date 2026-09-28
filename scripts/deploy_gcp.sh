@@ -47,15 +47,15 @@ gcloud services enable \
 
 # 4. Deploy to Cloud Run with Scale-to-Zero
 echo -e "${BLUE}[2/3] Building and deploying SatQuery AI container to Cloud Run...${NC}"
-echo -e "${YELLOW}(Configured with --min-instances 0: Costs $0.00 when idle!)${NC}"
+echo -e "${YELLOW}(Configured with --min-instances 0; build, storage, and network charges may still apply.)${NC}"
 
 gcloud run deploy satquery-backend \
     --source . \
     --platform managed \
     --region "$REGION" \
     --port 8080 \
-    --memory 4Gi \
-    --cpu 2 \
+    --memory 16Gi \
+    --cpu 8 \
     --timeout 300 \
     --concurrency 80 \
     --min-instances 0 \

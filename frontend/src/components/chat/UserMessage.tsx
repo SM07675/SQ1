@@ -42,7 +42,7 @@ export const UserMessage: React.FC<UserMessageProps> = ({
 
         {/* Attached image previews */}
         {attachments && attachments.length > 0 && (
-          <div className="user-attachments-row">
+          <div className={`user-attachments-row ${attachments.length > 1 ? "is-pair" : "is-single"}`}>
             {attachments.map((att, idx) => {
               const preview = att.preview_url || att.previewUrl;
               const isTiff = isTiffPath(att.name) || isTiffPath(att.url);
@@ -53,16 +53,14 @@ export const UserMessage: React.FC<UserMessageProps> = ({
 
               if (isImage) {
                 // Determine best URL for full resolution lightbox
-                const targetOpenUrl = preview || getPreviewUrl(att.url) || att.url;
-
                 return (
                   <TiffPreviewImage
                     key={idx}
                     src={att.url}
                     alt={att.name}
                     previewUrl={preview}
-                    onClick={() =>
-                      onOpenImage && onOpenImage(targetOpenUrl, att.name)
+                    onClick={(displayUrl) =>
+                      onOpenImage && onOpenImage(displayUrl || preview || getPreviewUrl(att.url) || att.url, att.name)
                     }
                   />
                 );

@@ -79,7 +79,26 @@ export async function convertTiffToDataUrl(
     const targetWidth = Math.max(1, Math.round(origWidth * scale));
     const targetHeight = Math.max(1, Math.round(origHeight * scale));
 
+    const sampleCount = image.getSamplesPerPixel();
+    const descriptions = await Promise.all(
+      Array.from({ length: Math.min(sampleCount, 16) }, async (_, index) => {
+        try {
+          const metadata = await image.getGDALMetadata(index);
+          return String(metadata?.DESCRIPTION ?? metadata?.description ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        } catch {
+          return "";
+        }
+      })
+    );
+    const findBand = (aliases: string[]) => descriptions.findIndex((name) => aliases.includes(name));
+    const red = findBand(["red", "b04", "b4"]);
+    const green = findBand(["green", "b03", "b3"]);
+    const blue = findBand(["blue", "b02", "b2"]);
+    const samples = red >= 0 && green >= 0 && blue >= 0
+      ? [red, green, blue]
+      : sampleCount >= 3 ? [0, 1, 2] : [0];
     const rasters = await image.readRasters({
+      samples,
       width: targetWidth,
       height: targetHeight,
       resampleMethod: "bilinear",
@@ -99,6 +118,9 @@ export async function convertTiffToDataUrl(
     const rBand = rasters[0] as ArrayLike<number>;
     const gBand = numBands >= 2 ? (rasters[1] as ArrayLike<number>) : rBand;
     const bBand = numBands >= 3 ? (rasters[2] as ArrayLike<number>) : (numBands >= 2 ? gBand : rBand);
+    const nodata = image.getGDALNoData();
+    const isValid = (index: number) =>
+      nodata === null || !(rBand[index] === nodata && gBand[index] === nodata && bBand[index] === nodata);
 
     // Helper for per-band normalization to 0-255
     const normalize = (band: ArrayLike<number>) => {
@@ -106,12 +128,12 @@ export async function convertTiffToDataUrl(
       let max = -Infinity;
       for (let i = 0; i < totalPixels; i++) {
         const val = band[i];
-        if (Number.isFinite(val)) {
+        if (isValid(i) && Number.isFinite(val)) {
           if (val < min) min = val;
           if (val > max) max = val;
         }
       }
-      if (max <= min) return () => 0;
+      if (max <= min) return () => max > 0 ? 128 : 0;
       if (min >= 0 && max <= 255 && band instanceof Uint8Array) {
         return (val: number) => val;
       }
@@ -131,7 +153,7 @@ export async function convertTiffToDataUrl(
       rgba[offset + 0] = normR(rBand[i]);
       rgba[offset + 1] = normG(gBand[i]);
       rgba[offset + 2] = normB(bBand[i]);
-      rgba[offset + 3] = 255;
+      rgba[offset + 3] = isValid(i) ? 255 : 0;
     }
 
     ctx.putImageData(imgData, 0, 0);

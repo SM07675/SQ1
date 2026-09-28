@@ -15,18 +15,24 @@ from shapely.geometry import shape
 from shapely.ops import transform as shapely_transform
 
 from app.schemas import QualityReport, RasterMetadata
-from app.services.spectral import available_indices
+from app.services.spectral import _canonical_band_map, available_indices
 
 
-def _normalize(array: np.ndarray) -> np.ndarray:
+def _normalize(array: np.ndarray, valid: np.ndarray | None = None, *, preserve_uint8: bool = False) -> np.ndarray:
     arr = array.astype("float32")
-    finite = arr[np.isfinite(arr)]
+    if valid is None:
+        valid = np.isfinite(arr)
+    else:
+        valid = valid & np.isfinite(arr)
+    finite = arr[valid]
     if finite.size == 0:
         return np.zeros_like(arr, dtype="float32")
+    if preserve_uint8 and array.dtype == np.uint8:
+        return np.where(valid, arr / 255.0, 0)
     low, high = np.percentile(finite, [2, 98])
     if high <= low:
-        return np.zeros_like(arr, dtype="float32")
-    return np.clip((arr - low) / (high - low), 0, 1)
+        return np.where(valid, 0.5 if high > 0 else 0.0, 0).astype("float32")
+    return np.where(valid, np.clip((arr - low) / (high - low), 0, 1), 0)
 
 
 def inspect_raster(path: Path) -> RasterMetadata:
@@ -241,14 +247,17 @@ def render_preview(path: Path, output_path: Path, max_size: int = 1024) -> Path:
         ratio = min(1.0, max_size / max(src.width, src.height))
         out_w = max(1, round(src.width * ratio))
         out_h = max(1, round(src.height * ratio))
-        indexes = [1, 2, 3] if src.count >= 3 else [1]
+        band_map = _canonical_band_map(src)
+        indexes = [band_map[k] for k in ("red", "green", "blue")] if all(k in band_map for k in ("red", "green", "blue")) else ([1, 2, 3] if src.count >= 3 else [1])
         data = src.read(indexes, out_shape=(len(indexes), out_h, out_w), resampling=Resampling.bilinear)
+        valid = src.dataset_mask(out_shape=(out_h, out_w), resampling=Resampling.nearest) > 0
         if len(indexes) == 1:
-            gray = (_normalize(data[0]) * 255).astype("uint8")
+            gray = (_normalize(data[0], valid, preserve_uint8=True) * 255).astype("uint8")
             rgb = np.stack([gray, gray, gray], axis=-1)
         else:
-            rgb = np.stack([(_normalize(data[i]) * 255).astype("uint8") for i in range(3)], axis=-1)
-        Image.fromarray(rgb, mode="RGB").save(output_path, format="PNG")
+            rgb = np.stack([(_normalize(data[i], valid, preserve_uint8=True) * 255).astype("uint8") for i in range(3)], axis=-1)
+        rgba = np.dstack((rgb, np.where(valid, 255, 0).astype("uint8")))
+        Image.fromarray(rgba, mode="RGBA").save(output_path, format="PNG")
     return output_path
 
 

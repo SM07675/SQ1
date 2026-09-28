@@ -8,7 +8,7 @@ interface TiffPreviewImageProps {
   alt: string;
   previewUrl?: string;
   className?: string;
-  onClick?: () => void;
+  onClick?: (displayUrl: string) => void;
   showBadge?: boolean;
 }
 
@@ -101,7 +101,7 @@ export const TiffPreviewImage: React.FC<TiffPreviewImageProps> = ({
     return (
       <div
         className={`tiff-preview-fallback ${className}`}
-        onClick={onClick}
+        onClick={() => onClick?.(displaySrc)}
         title={`${alt} (Click to open)`}
       >
         <div className="fallback-inner">
@@ -116,7 +116,7 @@ export const TiffPreviewImage: React.FC<TiffPreviewImageProps> = ({
   return (
     <div
       className={`user-attached-image-preview ${className}`}
-      onClick={onClick}
+      onClick={() => onClick?.(displaySrc)}
       title={`Click to inspect ${alt}`}
     >
       {isLoading && (
