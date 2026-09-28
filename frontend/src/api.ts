@@ -5,6 +5,7 @@ import type {
   DatasetSummary,
   ModelCapability,
 } from "./types";
+import { optimizeImageIfNeeded } from "./utils/imageOptimizer";
 
 export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
@@ -18,7 +19,10 @@ export async function apiFetch(path: string, options?: RequestInit): Promise<Res
     }
     return res;
   } catch (err) {
-    if (API_BASE) {
+    // Never fall back to Vercel edge proxy if sending FormData (image upload)
+    // because Vercel has a hard 4.5MB request limit and will always fail with HTTP 413.
+    const isFormData = options?.body instanceof FormData;
+    if (API_BASE && !isFormData) {
       console.warn(`[SatQuery API] Remote ${primaryUrl} failed, falling back to local: ${path}`, err);
       return await fetch(path, options);
     }
@@ -72,11 +76,14 @@ export async function analyzeImages(input: {
   imageA: File;
   imageB?: File;
 }): Promise<AnalysisResponse> {
+  const optA = await optimizeImageIfNeeded(input.imageA);
+  const optB = input.imageB ? await optimizeImageIfNeeded(input.imageB) : undefined;
+
   const body = new FormData();
   body.set("query", input.query);
   body.set("pair_type", input.pairType);
-  body.set("image_a", input.imageA);
-  if (input.imageB) body.set("image_b", input.imageB);
+  body.set("image_a", optA);
+  if (optB) body.set("image_b", optB);
 
   const response = await apiFetch(`/api/v1/analyze`, { method: "POST", body });
   if (!response.ok) {
@@ -197,11 +204,14 @@ export async function sendChatMessage(input: {
   imageA?: File;
   imageB?: File;
 }): Promise<import("./types").ChatMessageRecord> {
+  const optA = input.imageA ? await optimizeImageIfNeeded(input.imageA) : undefined;
+  const optB = input.imageB ? await optimizeImageIfNeeded(input.imageB) : undefined;
+
   const body = new FormData();
   body.set("query", input.query);
   if (input.pairType) body.set("pair_type", input.pairType);
-  if (input.imageA) body.set("image_a", input.imageA);
-  if (input.imageB) body.set("image_b", input.imageB);
+  if (optA) body.set("image_a", optA);
+  if (optB) body.set("image_b", optB);
 
   const response = await apiFetch(`/api/v1/chats/${input.chatId}/messages`, {
     method: "POST",

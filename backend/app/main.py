@@ -94,10 +94,18 @@ def get_raster_preview(path: str):
     return FileResponse(preview_file, media_type="image/png")
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=[
+        "https://frontend-chi-mauve-51.vercel.app",
+        "https://frontend-git-main-unirohans-projects.vercel.app",
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+    ],
     allow_origin_regex=r".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
