@@ -43,6 +43,7 @@ class Settings:
     environment: str = os.getenv("SATQUERY_ENV", "development")
     artifact_dir: Path = Path(os.getenv("SATQUERY_ARTIFACT_DIR", "artifacts"))
     max_upload_mb: int = int(os.getenv("SATQUERY_MAX_UPLOAD_MB", "256"))
+    upload_bucket: str = os.getenv("SATQUERY_UPLOAD_BUCKET", "")
     cors_origins: tuple[str, ...] = _split_csv(
         os.getenv("SATQUERY_CORS_ORIGINS", "http://localhost:5173,http://localhost:8080")
     )

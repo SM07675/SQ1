@@ -12897,4 +12897,69 @@ img {
   .user-attached-image-preview img { height: 160px; }
 }
 
+/* Evidence opens as a contained panel rather than expanding into the page. */
+.evidence-drawer-panel {
+  width: min(1020px, calc(100vw - 40px));
+  max-width: none;
+  min-width: 0;
+}
+.evidence-drawer-panel .inspector-header,
+.inspector-drawer-panel .inspector-header {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border-glass);
+}
+.evidence-drawer-panel .inspector-title { margin: 0; font-size: 17px; }
+.evidence-drawer-subtitle { margin: 4px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
+.evidence-drawer-body { min-height: 0; padding: 18px 22px 28px; }
+.evidence-drawer-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.evidence-grid-card { min-width: 0; padding: 9px; gap: 7px; }
+button.evidence-card-img-wrap {
+  width: 100%; display: block; padding: 0; border: 0; text-align: inherit;
+}
+.evidence-card-img-wrap img {
+  width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: contain;
+  background: #0b1420;
+}
+.evidence-art-name { min-width: 0; font-size: 12px; }
+.evidence-download-icon { flex: none; padding: 5px; border-radius: 7px; }
+.evidence-download-icon:hover { background: rgba(22, 137, 255, .10); }
+.evidence-empty { grid-column: 1 / -1; color: var(--text-secondary); text-align: center; padding: 48px 12px; }
+
+/* Keep long replies and evidence inside the available chat width. */
+.conversation-workspace, .conversation-message-stream, .message-row,
+.assistant-message-body, .assistant-structured-results, .user-message-bubble,
+.analysis-viewer-column, .analysis-findings-column { min-width: 0; }
+.assistant-message-body { width: min(100%, 1000px); max-width: 1000px; }
+.user-message-bubble { max-width: min(780px, calc(100% - 56px)); }
+.assistant-structured-results { overflow: hidden; }
+.assistant-analysis-grid { grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr); }
+.assistant-intro-text, .assistant-conclusion-text, .user-text-content,
+.finding-label-text, .finding-value-text { overflow-wrap: anywhere; }
+.mini-evidence-gallery { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.mini-evidence-card img { height: 98px; object-fit: contain; background: #0b1420; }
+.chat-page-header { padding: clamp(18px, 3vw, 34px) 0 clamp(16px, 2.5vw, 28px); }
+.chat-page-title { font-size: clamp(28px, 3.6vw, 44px); }
+.chat-page-subtitle { font-size: clamp(13px, 1.25vw, 15px); line-height: 1.45; }
+
+@media (max-width: 1050px) {
+  .evidence-drawer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .assistant-analysis-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .evidence-drawer-panel { left: 0; right: 0; width: auto; max-width: none; }
+  .evidence-drawer-panel .inspector-header { padding: 13px 16px; }
+  .evidence-drawer-body { padding: 12px 14px 24px; }
+  .evidence-drawer-grid { gap: 9px; }
+  .evidence-grid-card { padding: 6px; }
+  .evidence-art-name { font-size: 11px; }
+  .assistant-message-body { width: 100%; }
+  .chat-page-subtitle { padding: 0 14px; }
+}
+@media (max-width: 430px) {
+  .evidence-drawer-grid { grid-template-columns: 1fr; }
+  .evidence-card-img-wrap img { aspect-ratio: 16 / 7; }
+}
+
 

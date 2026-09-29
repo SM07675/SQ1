@@ -31,18 +31,17 @@ function formatArea(areaM2?: number | null): string | null {
   return `${Math.round(areaM2)} m²`;
 }
 
-function getStatusBadge(status: VerdictStatus, confidence: number) {
-  const confPct = Math.round(confidence * 100);
+function getStatusBadge(status: VerdictStatus) {
   switch (status) {
     case "supported":
       return {
-        label: `Supported (${confPct}%)`,
+        label: "Supported",
         className: "status-pill-supported",
         icon: <CheckCircle2 size={13} />,
       };
     case "supported_with_limitations":
       return {
-        label: `Supported with Limitations (${confPct}%)`,
+        label: "Supported with limitations",
         className: "status-pill-limited",
         icon: <AlertTriangle size={13} />,
       };
@@ -53,10 +52,15 @@ function getStatusBadge(status: VerdictStatus, confidence: number) {
         icon: <XCircle size={13} />,
       };
     case "low_confidence":
+      return {
+        label: "Limited evidence",
+        className: "status-pill-inconclusive",
+        icon: <HelpCircle size={13} />,
+      };
     case "insufficient_evidence":
     default:
       return {
-        label: "Inconclusive Signal",
+        label: "Insufficient evidence",
         className: "status-pill-inconclusive",
         icon: <HelpCircle size={13} />,
       };
@@ -211,14 +215,14 @@ export const ResultSummary: React.FC<ResultSummaryProps> = ({ result }) => {
     // Add confidence if we have room
     if (metrics.length < 4 && verdict.confidence != null) {
       metrics.push({
-        label: "Confidence Score",
-        value: `${Math.round(verdict.confidence * 100)}%`,
+        label: verdict.confidence_kind === "uncalibrated_evidence_strength" ? "Evidence strength" : "Confidence score",
+        value: verdict.confidence_kind === "uncalibrated_evidence_strength" ? verdict.confidence.toFixed(2) : `${Math.round(verdict.confidence * 100)}%`,
         icon: <CheckCircle2 size={14} />,
       });
     }
   }
 
-  const badge = getStatusBadge(verdict.status, verdict.confidence);
+  const badge = getStatusBadge(verdict.status);
 
   return (
     <div className="result-summary-card">

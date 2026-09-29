@@ -7,7 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Header
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -178,6 +179,66 @@ async def _save_upload(upload: UploadFile, destination: Path) -> None:
         await upload.close()
 
 
+class UploadSessionRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    size: int = Field(gt=0)
+
+
+def _upload_blob(upload_id: str):
+    if not settings.upload_bucket:
+        raise HTTPException(503, "Large image uploads are not configured on this server.")
+    try:
+        object_id, suffix = upload_id.rsplit(".", 1)
+        uuid.UUID(object_id)
+    except (ValueError, AttributeError):
+        raise HTTPException(422, "Invalid upload reference") from None
+    if f".{suffix}" not in ALLOWED_EXTENSIONS:
+        raise HTTPException(415, "Unsupported upload format")
+    from google.cloud import storage
+
+    return storage.Client().bucket(settings.upload_bucket).blob(f"incoming/{upload_id}")
+
+
+def _save_staged_upload(upload_id: str, destination: Path) -> None:
+    blob = _upload_blob(upload_id)
+    from google.api_core.exceptions import NotFound
+    try:
+        blob.reload()
+    except NotFound:
+        raise HTTPException(422, "Large image upload has not finished") from None
+    if not blob.size or blob.size > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(413, f"Upload exceeds {settings.max_upload_mb} MB")
+    blob.download_to_filename(str(destination))
+
+
+@app.post("/api/v1/uploads/session")
+def create_upload_session(payload: UploadSessionRequest, origin: str | None = Header(default=None)) -> dict[str, str]:
+    if origin and origin not in {
+        "https://frontend-chi-mauve-51.vercel.app",
+        "https://frontend-git-main-unirohans-projects.vercel.app",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    }:
+        raise HTTPException(403, "Upload origin is not allowed")
+    suffix = Path(payload.filename).suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(415, f"Unsupported file extension: {suffix}")
+    if payload.size > settings.max_upload_mb * 1024 * 1024:
+        raise HTTPException(413, f"Upload exceeds {settings.max_upload_mb} MB")
+    upload_id = f"{uuid.uuid4()}{suffix}"
+    blob = _upload_blob(upload_id)
+    try:
+        url = blob.create_resumable_upload_session(
+            content_type="image/tiff" if suffix in {".tif", ".tiff"} else "application/octet-stream",
+            size=payload.size,
+            origin=origin,
+            if_generation_match=0,
+        )
+    except Exception as exc:
+        raise HTTPException(503, f"Could not start large image upload: {exc}") from exc
+    return {"upload_id": upload_id, "upload_url": url}
+
+
 @app.get("/health")
 def health() -> dict[str, object]:
     return {"status": "ok", "environment": settings.environment, "models": registry.capabilities()}
@@ -205,12 +266,20 @@ def model_status() -> dict[str, object]:
 @app.post("/api/v1/analyze", response_model=AnalysisResponse)
 async def analyze_images(
     query: Annotated[str, Form(min_length=2, max_length=1000)],
-    image_a: Annotated[UploadFile, File(description="Primary GeoTIFF/TIFF or benchmark image")],
+    image_a: Annotated[UploadFile | None, File(description="Primary GeoTIFF/TIFF or benchmark image")] = None,
     image_b: Annotated[UploadFile | None, File(description="Optional paired image")] = None,
+    image_a_upload: Annotated[str | None, Form()] = None,
+    image_b_upload: Annotated[str | None, Form()] = None,
+    image_a_name: Annotated[str | None, Form()] = None,
+    image_b_name: Annotated[str | None, Form()] = None,
     pair_type: Annotated[str, Form(pattern="^(auto|single|bi_temporal|optical_sar)$")] = "auto",
     netcdf_variable: Annotated[str | None, Form()] = None,
 ) -> AnalysisResponse:
-    if pair_type in {"bi_temporal", "optical_sar"} and image_b is None:
+    if (image_a is None) == (image_a_upload is None):
+        raise HTTPException(422, "Provide exactly one primary image")
+    if image_b is not None and image_b_upload is not None:
+        raise HTTPException(422, "Provide only one second image")
+    if pair_type in {"bi_temporal", "optical_sar"} and image_b is None and image_b_upload is None:
         raise HTTPException(422, f"pair_type={pair_type} requires image_b")
 
     result_id = str(uuid.uuid4())
@@ -218,12 +287,18 @@ async def analyze_images(
     output_dir.mkdir(parents=True, exist_ok=False)
     paths: list[Path] = []
     try:
-        first = output_dir / f"input_a{Path(image_a.filename or '.tif').suffix.lower()}"
-        await _save_upload(image_a, first)
+        first = output_dir / f"input_a{Path(image_a.filename or '.tif').suffix.lower() if image_a else Path(image_a_upload).suffix.lower()}"
+        if image_a:
+            await _save_upload(image_a, first)
+        else:
+            _save_staged_upload(image_a_upload, first)
         paths.append(first)
-        if image_b is not None:
-            second = output_dir / f"input_b{Path(image_b.filename or '.tif').suffix.lower()}"
-            await _save_upload(image_b, second)
+        if image_b is not None or image_b_upload is not None:
+            second = output_dir / f"input_b{Path(image_b.filename or '.tif').suffix.lower() if image_b else Path(image_b_upload).suffix.lower()}"
+            if image_b:
+                await _save_upload(image_b, second)
+            else:
+                _save_staged_upload(image_b_upload, second)
             paths.append(second)
         prepared_paths = [
             prepare_source(path, output_dir / f"prepared_{index + 1}", netcdf_variable).raster_path
@@ -525,6 +600,10 @@ async def post_chat_message(
     query: Annotated[str, Form(min_length=1, max_length=1000)],
     image_a: Annotated[UploadFile | None, File()] = None,
     image_b: Annotated[UploadFile | None, File()] = None,
+    image_a_upload: Annotated[str | None, Form()] = None,
+    image_b_upload: Annotated[str | None, Form()] = None,
+    image_a_name: Annotated[str | None, Form()] = None,
+    image_b_name: Annotated[str | None, Form()] = None,
     files: Annotated[list[UploadFile] | None, File()] = None,
     pair_type: Annotated[str, Form(pattern="^(auto|single|bi_temporal|optical_sar)$")] = "auto",
     netcdf_variable: Annotated[str | None, Form()] = None,
@@ -538,6 +617,12 @@ async def post_chat_message(
             image_a = files[0]
         if image_b is None and len(files) >= 2:
             image_b = files[1]
+    if image_a is not None and image_a_upload is not None:
+        raise HTTPException(422, "Provide only one primary image")
+    if image_b is not None and image_b_upload is not None:
+        raise HTTPException(422, "Provide only one second image")
+    if (image_b is not None or image_b_upload is not None) and image_a is None and image_a_upload is None:
+        raise HTTPException(422, "Second image requires a primary image")
 
     chat_dir = settings.artifact_dir / "chats" / chat_id
     chat_dir.mkdir(parents=True, exist_ok=True)
@@ -547,10 +632,13 @@ async def post_chat_message(
     user_msg_attachments: list[dict[str, Any]] = []
 
     # CASE 1: New image(s) provided in message
-    if image_a is not None:
-        ext_a = Path(image_a.filename or ".png").suffix.lower()
+    if image_a is not None or image_a_upload is not None:
+        ext_a = Path(image_a.filename or ".png").suffix.lower() if image_a else Path(image_a_upload).suffix.lower()
         img_a_path = chat_dir / f"image_1{ext_a}"
-        await _save_upload(image_a, img_a_path)
+        if image_a:
+            await _save_upload(image_a, img_a_path)
+        else:
+            _save_staged_upload(image_a_upload, img_a_path)
         img_a_url = f"/artifacts/chats/{chat_id}/image_1{ext_a}"
         preview_a_url = img_a_url
         if ext_a in (".tif", ".tiff"):
@@ -561,14 +649,18 @@ async def post_chat_message(
             except Exception:
                 pass
         img_id_1 = str(uuid.uuid4())
-        repository.add_chat_image(img_id_1, chat_id, image_a.filename or "image_1", img_a_path, img_a_url)
+        name_a = image_a.filename if image_a else image_a_name or image_a_upload
+        repository.add_chat_image(img_id_1, chat_id, name_a or "image_1", img_a_path, img_a_url)
         stored_paths = [img_a_path]
-        user_msg_attachments.append({"name": image_a.filename, "url": img_a_url, "preview_url": preview_a_url, "type": "image"})
+        user_msg_attachments.append({"name": name_a, "url": img_a_url, "preview_url": preview_a_url, "type": "image"})
 
-        if image_b is not None:
-            ext_b = Path(image_b.filename or ".png").suffix.lower()
+        if image_b is not None or image_b_upload is not None:
+            ext_b = Path(image_b.filename or ".png").suffix.lower() if image_b else Path(image_b_upload).suffix.lower()
             img_b_path = chat_dir / f"image_2{ext_b}"
-            await _save_upload(image_b, img_b_path)
+            if image_b:
+                await _save_upload(image_b, img_b_path)
+            else:
+                _save_staged_upload(image_b_upload, img_b_path)
             img_b_url = f"/artifacts/chats/{chat_id}/image_2{ext_b}"
             preview_b_url = img_b_url
             if ext_b in (".tif", ".tiff"):
@@ -579,9 +671,10 @@ async def post_chat_message(
                 except Exception:
                     pass
             img_id_2 = str(uuid.uuid4())
-            repository.add_chat_image(img_id_2, chat_id, image_b.filename or "image_2", img_b_path, img_b_url)
+            name_b = image_b.filename if image_b else image_b_name or image_b_upload
+            repository.add_chat_image(img_id_2, chat_id, name_b or "image_2", img_b_path, img_b_url)
             stored_paths.append(img_b_path)
-            user_msg_attachments.append({"name": image_b.filename, "url": img_b_url, "preview_url": preview_b_url, "type": "image"})
+            user_msg_attachments.append({"name": name_b, "url": img_b_url, "preview_url": preview_b_url, "type": "image"})
 
         # Record user message
         user_msg_id = str(uuid.uuid4())

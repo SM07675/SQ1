@@ -1,10 +1,10 @@
 /**
  * Client-side image preprocessor and optimizer.
- * Prevents payload rejection by Google Cloud Run (32MB limit)
- * and Vercel edge proxy (4.5MB limit).
+ * Keeps GeoTIFF bytes intact; the API client uploads large files directly
+ * to private storage rather than sending them through the request proxy.
  */
 
-export const MAX_SAFE_TIFF_BYTES = 30 * 1024 * 1024; // 30 MB ceiling for Cloud Run direct upload
+export const MAX_DIRECT_UPLOAD_BYTES = 30 * 1024 * 1024;
 
 export function isTiff(file: File): boolean {
   return (
@@ -21,11 +21,6 @@ export function isTiff(file: File): boolean {
 export async function optimizeImageIfNeeded(file: File, maxDimension = 3000, quality = 0.92): Promise<File> {
   // Never convert or downsample GeoTIFFs via HTML Canvas (strips georeferencing tags and multispectral bands)
   if (isTiff(file)) {
-    if (file.size > MAX_SAFE_TIFF_BYTES) {
-      throw new Error(
-        `GeoTIFF file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Google Cloud Run's upload limit is 32 MB. Please provide a cropped tile under 30 MB.`
-      );
-    }
     return file;
   }
 

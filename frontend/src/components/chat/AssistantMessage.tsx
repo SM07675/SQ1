@@ -64,13 +64,12 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   const paragraphs = content.split("\n\n").filter(Boolean);
   const introText =
     paragraphs[0] ||
-    "I analyzed the satellite imagery and found several notable changes in this region between the two time periods. Here are the key insights:";
+    result?.verdict?.answer ||
+    "No analysis summary was returned for this image.";
   const conclusionText =
     paragraphs.length > 1
       ? paragraphs.slice(1).join("\n\n")
-      : result?.verdict?.answer ||
-        result?.summary?.explanation ||
-        "The region shows significant urban development with new buildings and infrastructure, a decrease in vegetation cover, and a slight expansion of water bodies, likely due to coastal development or land reclamation.";
+      : "";
 
   return (
     <div className="message-row assistant-row">

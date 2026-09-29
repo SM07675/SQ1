@@ -229,6 +229,8 @@ def compute_rgb_water_proxy(
     gradient_mag = np.sqrt(gx * gx + gy * gy)
     strong_edges = (gradient_mag > 0.050).astype("float32")
     urban_edge_density = ndi.uniform_filter(strong_edges, size=15)
+    broad_urban_edges = ndi.uniform_filter(strong_edges, size=31)
+    bright_surface_density = ndi.uniform_filter((brightness > 0.55).astype("float32"), size=61)
 
     # 3. Suppressions:
     # A. Vegetation / agricultural fields / forest canopy / grass
@@ -250,6 +252,11 @@ def compute_rgb_water_proxy(
     color_spread = np.maximum(np.abs(r - g), np.maximum(np.abs(g - b), np.abs(r - b)))
     is_neutral_gray = (color_spread < 0.030) & (ndbr < 0.05) & (b <= r * 1.10)
     is_urban_structure = (urban_edge_density > 0.08) | is_neutral_gray
+    # Blue-tinted asphalt may pass every color test. A road runs through a
+    # larger field of roof and curb edges, unlike an open water surface.
+    urban_scene = float(np.mean((brightness > 0.55) & valid)) > 0.20
+    context_threshold = 0.005 if urban_scene else 0.08
+    road_context = (bright_surface_density > context_threshold) & (broad_urban_edges > context_threshold)
     # Note: is_neutral_gray covers neutral-gray pixels (e.g. cast building shadows with r≈g≈b).
     # Deep ocean water has b > r and is not neutral gray.
 
@@ -277,6 +284,7 @@ def compute_rgb_water_proxy(
         | is_too_bright
         | is_too_dark
         | (is_dark_soil & ~is_unambiguous_blue_water)
+        | road_context
     )
 
     # 4. Multi-type water candidates:
@@ -341,6 +349,8 @@ def compute_rgb_water_proxy(
         "core_seed_pixels": int(core_seeds.sum()),
         "vegetation_suppressed": int(is_vegetation.sum()),
         "urban_suppressed": int(is_urban_structure.sum()),
+        "road_context_suppressed": int(road_context.sum()),
+        "urban_scene": urban_scene,
         "connected_dark_water_pixels": int(connected_dark.sum()),
         "vegetation_probability": np.where(valid, np.clip((exg + 0.02) / 0.30, 0.0, 1.0), 0.0).astype("float32"),
         "builtup_probability": np.where(valid, np.clip(urban_edge_density / 0.22, 0.0, 1.0), 0.0).astype("float32"),
@@ -754,6 +764,19 @@ def confirm_aerial_water(
     }
 
 
+def suppress_road_water_conflicts(
+    water_probability: np.ndarray,
+    built_probability: np.ndarray,
+    rgb_water_probability: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Withhold aerial water where built surfaces win and RGB has no water cue."""
+    if water_probability.shape != built_probability.shape or water_probability.shape != rgb_water_probability.shape:
+        raise ValueError("Water and built-up evidence grids do not align.")
+    conflict = (built_probability >= np.maximum(0.35, water_probability * 0.70)) & (rgb_water_probability < 0.50)
+    filtered = np.where(conflict, np.minimum(water_probability, 0.10), water_probability)
+    return filtered.astype("float32"), conflict
+
+
 def execute_water_pipeline(
     path: Path,
     output_dir: Path,
@@ -826,6 +849,11 @@ def execute_water_pipeline(
                             )
                             valid &= model_valid
                             prob = np.where(valid, model_probability, 0.0).astype("float32")
+                            # A learned mask must still respect direct spectral
+                            # evidence; paved surfaces are frequent water lookalikes.
+                            prob[exclusion | (spectral_reference < 0.12)] = np.minimum(
+                                prob[exclusion | (spectral_reference < 0.12)], 0.05
+                            )
                             threshold = float(specialist["threshold"])
                         except (ValueError, ImportError, RuntimeError, OSError) as exc:
                             fallback_events.append(f"FINE_TUNED_MODEL_UNAVAILABLE: {exc}")
@@ -837,6 +865,9 @@ def execute_water_pipeline(
                         )
                         valid &= model_valid
                         prob = np.where(valid, model_probability, 0.0).astype("float32")
+                        prob[exclusion | (spectral_reference < 0.12)] = np.minimum(
+                            prob[exclusion | (spectral_reference < 0.12)], 0.05
+                        )
                         threshold = float(specialist["threshold"])
                     except (ValueError, ImportError, RuntimeError, OSError) as exc:
                         fallback_events.append(
@@ -913,6 +944,12 @@ def execute_water_pipeline(
                             if rgb is not None:
                                 pre_shadow = rgb_shadow_evidence(rgb[0], rgb[1], rgb[2], valid)
                                 prob = np.where(pre_shadow.mask & (prob < 0.78), np.minimum(prob, 0.12), prob)
+                        # Roads and roofs can receive a strong water score from
+                        # aerial networks. Require visible water color support
+                        # where the independent built-up classes also respond.
+                        built_score = scores[list(built_indexes)].sum(0)
+                        prob, road_conflict = suppress_road_water_conflicts(prob, built_score, spectral_reference)
+                        details["road_conflict_pixels"] = int((road_conflict & valid).sum())
                         core_seeds = None
                         details["vegetation_probability"] = scores[list(vegetation_indexes)].sum(0)
                         details["builtup_probability"] = scores[list(built_indexes)].sum(0)

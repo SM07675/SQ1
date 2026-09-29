@@ -12,9 +12,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://localhost:8000",
-      "/health": "http://localhost:8000",
-      "/artifacts": "http://localhost:8000"
+      "/api": { target: process.env.SATQUERY_DEV_API_TARGET || "http://localhost:8000", changeOrigin: true },
+      "/health": { target: process.env.SATQUERY_DEV_API_TARGET || "http://localhost:8000", changeOrigin: true },
+      "/artifacts": { target: process.env.SATQUERY_DEV_API_TARGET || "http://localhost:8000", changeOrigin: true }
     }
   }
 });

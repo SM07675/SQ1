@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   Sliders,
@@ -35,10 +36,10 @@ export const AnalysisInspector: React.FC<AnalysisInspectorProps> = ({
 
   const { verdict, quality, assets, evidence, trace, artifacts, models_used, timings } = result;
 
-  return (
+  return createPortal(
     <>
-      <div className="drawer-backdrop visible" onClick={onClose} />
-      <aside className="inspector-drawer open" aria-label="Analysis Inspector">
+      <div className="evidence-overlay" onClick={onClose} aria-hidden="true" />
+      <aside className="inspector-drawer-panel" aria-label="Analysis Inspector" role="dialog" aria-modal="true">
         <div className="inspector-header">
           <div className="inspector-header-left">
             <Sliders size={16} className="inspector-icon" />
@@ -107,7 +108,7 @@ export const AnalysisInspector: React.FC<AnalysisInspectorProps> = ({
                 <div className="verdict-status-box">
                   <div className="status-name-row">
                     <span className="status-text">{verdict.status.replace(/_/g, " ").toUpperCase()}</span>
-                    <span className="status-score">{Math.round(verdict.confidence * 100)}% Confidence</span>
+                    <span className="status-score">{verdict.confidence_kind === "uncalibrated_evidence_strength" ? `Evidence strength ${verdict.confidence.toFixed(2)}` : `${Math.round(verdict.confidence * 100)}% confidence`}</span>
                   </div>
                   <p className="status-desc">{verdict.answer}</p>
                 </div>
@@ -304,6 +305,7 @@ export const AnalysisInspector: React.FC<AnalysisInspectorProps> = ({
           )}
         </div>
       </aside>
-    </>
+    </>,
+    document.body
   );
 };

@@ -5,7 +5,7 @@ import type {
   DatasetSummary,
   ModelCapability,
 } from "./types";
-import { optimizeImageIfNeeded } from "./utils/imageOptimizer";
+import { MAX_DIRECT_UPLOAD_BYTES, optimizeImageIfNeeded } from "./utils/imageOptimizer";
 
 export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
@@ -39,6 +39,31 @@ export function artifactUrl(path?: string | null): string | undefined {
   if (!path) return undefined;
   if (/^https?:\/\//.test(path)) return path;
   return `${API_BASE}${path}`;
+}
+
+async function attachImage(body: FormData, field: "image_a" | "image_b", file: File): Promise<void> {
+  if (file.size <= MAX_DIRECT_UPLOAD_BYTES) {
+    body.set(field, file);
+    return;
+  }
+  const session = await apiFetch("/api/v1/uploads/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: file.name, size: file.size }),
+  });
+  if (!session.ok) {
+    const payload = await session.json().catch(() => null) as { detail?: string } | null;
+    throw new Error(payload?.detail ?? `Could not start TIFF upload (HTTP ${session.status})`);
+  }
+  const { upload_id, upload_url } = await session.json() as { upload_id: string; upload_url: string };
+  const upload = await fetch(upload_url, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || (file.name.toLowerCase().endsWith(".tif") || file.name.toLowerCase().endsWith(".tiff") ? "image/tiff" : "application/octet-stream") },
+    body: file,
+  });
+  if (!upload.ok) throw new Error(`Large TIFF upload failed (HTTP ${upload.status}). Please retry.`);
+  body.set(`${field}_upload`, upload_id);
+  body.set(`${field}_name`, file.name);
 }
 
 export async function downloadPdfReport(resultId: string, customFilename?: string): Promise<void> {
@@ -87,8 +112,8 @@ export async function analyzeImages(input: {
   const body = new FormData();
   body.set("query", input.query);
   body.set("pair_type", input.pairType);
-  body.set("image_a", optA);
-  if (optB) body.set("image_b", optB);
+  await attachImage(body, "image_a", optA);
+  if (optB) await attachImage(body, "image_b", optB);
 
   const response = await apiFetch(`/api/v1/analyze`, { method: "POST", body });
   if (!response.ok) {
@@ -215,8 +240,8 @@ export async function sendChatMessage(input: {
   const body = new FormData();
   body.set("query", input.query);
   if (input.pairType) body.set("pair_type", input.pairType);
-  if (optA) body.set("image_a", optA);
-  if (optB) body.set("image_b", optB);
+  if (optA) await attachImage(body, "image_a", optA);
+  if (optB) await attachImage(body, "image_b", optB);
 
   const response = await apiFetch(`/api/v1/chats/${input.chatId}/messages`, {
     method: "POST",
