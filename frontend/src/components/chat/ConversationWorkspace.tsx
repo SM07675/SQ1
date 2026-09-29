@@ -51,14 +51,16 @@ export const ConversationWorkspace: React.FC<ConversationWorkspaceProps> = ({
 
   return (
     <div className="conversation-workspace" ref={containerRef} onScroll={handleScroll}>
-      {/* Chat header matching screenshot 2 */}
-      <div className="chat-page-header">
+      {/* Chat header (compact when messages exist to bring results into immediate view) */}
+      <div className={`chat-page-header ${messages.length > 0 ? "has-messages" : ""}`}>
         <h2 className="chat-page-title">
           Ask <span className="gradient-text">SatQuery</span>
         </h2>
-        <p className="chat-page-subtitle">
-          Ask questions about satellite imagery and receive clear, actionable insights.
-        </p>
+        {messages.length === 0 && (
+          <p className="chat-page-subtitle">
+            Ask questions about satellite imagery and receive clear, actionable insights.
+          </p>
+        )}
       </div>
 
       <div className="conversation-message-stream">

@@ -121,10 +121,9 @@ export const LiquidAuroraBackground: React.FC<{ theme?: "light" | "dark" }> = ({
         }
         isPlaying={true}
         shadowPower={theme === "dark" ? 8 : 6}
-        darkenTop={false}
-        noiseSpeed={0.000015}
-        noiseFrequency={[0.00015, 0.0008]}
-        deform={{ incline: 0.45, noiseAmp: 280, noiseFlow: 4 }}
+        noiseSpeed={0.000009}
+        noiseFrequency={[0.00014, 0.0007]}
+        deform={{ incline: 0.32, noiseAmp: 170, noiseFlow: 2.2, noiseSpeed: 2.0 }}
       />
 
       {/* 2. Atmospheric subtle floating particles */}

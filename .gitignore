@@ -62,4 +62,6 @@ Thumbs.db
 **/.vercel/
 logs/
 *.zip
-
+.npm-cache/
+**/.npm-cache/
+reports/

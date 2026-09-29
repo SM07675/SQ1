@@ -16,6 +16,7 @@ import { getPreviewUrl } from "../../utils/tiffViewer";
 import { VisualResultCard } from "../results/VisualResultCard";
 import { KeyFindingsCard } from "../results/KeyFindingsCard";
 import { ReportCard } from "../results/ReportCard";
+import { CoverageBreakdown, cleanLongCoverageText } from "../results/CoverageBreakdown";
 
 interface AssistantMessageProps {
   content: string;
@@ -61,10 +62,11 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
   const hasReport = result?.artifacts.some((a) => a.name.endsWith(".pdf"));
 
   // Split paragraphs to separate intro and summary if result is present
-  const paragraphs = content.split("\n\n").filter(Boolean);
+  const cleanedContent = cleanLongCoverageText(content);
+  const paragraphs = cleanedContent.split("\n\n").filter(Boolean);
   const introText =
     paragraphs[0] ||
-    result?.verdict?.answer ||
+    cleanLongCoverageText(result?.verdict?.answer || "") ||
     "No analysis summary was returned for this image.";
   const conclusionText =
     paragraphs.length > 1
@@ -103,6 +105,11 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
                 />
               </div>
             </div>
+          )}
+
+          {/* 2b. Full-width Land-Cover Summary & Breakdown Section */}
+          {result && (
+            <CoverageBreakdown result={result} rawText={content} />
           )}
 
           {/* 3. Concluding summary paragraph */}
