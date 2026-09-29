@@ -11,8 +11,9 @@ from shapely.geometry import shape
 
 
 class Repository:
-    def __init__(self, database_path: Path) -> None:
+    def __init__(self, database_path: Path, report_storage=None) -> None:
         self.database_path = database_path
+        self.report_storage = report_storage
 
     def _connect(self) -> sqlite3.Connection:
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -142,6 +143,19 @@ class Repository:
         # Decompose and index all GeoJSON geometries generated during analysis
         if output_dir and output_dir.exists():
             self._index_output_geometries(result_id, output_dir, created_at)
+        if self.report_storage is not None:
+            with self._connect() as db:
+                geometries_count = db.execute(
+                    "SELECT COUNT(*) FROM evidence_geometries WHERE result_id=?", (result_id,)
+                ).fetchone()[0]
+            run = {
+                "result_id": result_id, "task_type": str(task_type), "query_text": query_text,
+                "verdict_status": str(verdict_status), "confidence": confidence,
+                "created_at": created_at, "geometries_count": geometries_count,
+            }
+            self.report_storage.save(
+                result_id, payload, (output_dir or self.database_path.parent / result_id) / "GeoProof_Report.pdf", run
+            )
 
     def _index_output_geometries(self, result_id: str, output_dir: Path, created_at: str) -> None:
         # Analysis producers may place evidence several directories below the run root.
@@ -199,7 +213,11 @@ class Repository:
     def get_result(self, result_id: str) -> dict[str, Any] | None:
         with self._connect() as db:
             row = db.execute("SELECT payload_json FROM results WHERE result_id=?", (result_id,)).fetchone()
-        return json.loads(row["payload_json"]) if row else None
+        if row:
+            return json.loads(row["payload_json"])
+        if self.report_storage is not None:
+            return self.report_storage.get_result(result_id)
+        return None
 
     def query_geometries(
         self,
@@ -273,7 +291,7 @@ class Repository:
         with self._connect() as db:
             rows = db.execute(query, params).fetchall()
 
-        return [
+        local_records = [
             {
                 "result_id": row["result_id"],
                 "task_type": row["task_type"],
@@ -285,6 +303,17 @@ class Repository:
             }
             for row in rows
         ]
+        if self.report_storage is None:
+            return local_records
+        records = {record["result_id"]: record for record in self.report_storage.list_runs(limit=limit)}
+        records.update({record["result_id"]: record for record in local_records})
+        merged = list(records.values())
+        merged.sort(key=lambda record: record["created_at"], reverse=True)
+        if verdict_status:
+            merged = [record for record in merged if record["verdict_status"] == verdict_status]
+        if task_type:
+            merged = [record for record in merged if record["task_type"] == task_type]
+        return merged[:limit]
 
     # =========================================================================
     # Conversation / Chat Persistence Methods

@@ -40,10 +40,12 @@ from app.services.integrated_analysis import analyze
 from app.services.planner import is_optical_sar_query
 from app.services.raster import inspect_raster, render_preview
 from app.services.report import write_pdf_report
+from app.services.report_storage import ReportStorage
 
 
 ALLOWED_EXTENSIONS = {".tif", ".tiff", ".png", ".jpg", ".jpeg", *NETCDF_SUFFIXES}
-repository = Repository(settings.database_path)
+report_storage = ReportStorage(settings.report_bucket) if settings.report_bucket else None
+repository = Repository(settings.database_path, report_storage=report_storage)
 
 
 @asynccontextmanager
@@ -116,6 +118,9 @@ def get_artifact_pdf(result_id: str):
     output_dir = settings.artifact_dir / result_id
     pdf_path = output_dir / "GeoProof_Report.pdf"
     if not pdf_path.exists():
+        if report_storage is not None:
+            report_storage.restore_pdf(result_id, pdf_path)
+    if not pdf_path.exists():
         payload = repository.get_result(result_id)
         if payload is not None:
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -138,6 +143,9 @@ def get_result_pdf(result_id: str):
     """Direct API endpoint for retrieving or generating the PDF audit report."""
     output_dir = settings.artifact_dir / result_id
     pdf_path = output_dir / "GeoProof_Report.pdf"
+    if not pdf_path.exists():
+        if report_storage is not None:
+            report_storage.restore_pdf(result_id, pdf_path)
     if not pdf_path.exists():
         payload = repository.get_result(result_id)
         if payload is None:
