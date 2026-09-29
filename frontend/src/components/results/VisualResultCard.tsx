@@ -552,8 +552,8 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
           <div className="visual-legend-items">
             {showLandClass("built_up") && (
               <span className="visual-legend-item">
-                <span className="legend-swatch" style={{ background: "#dc2626" }} />
-                <span>Buildings / Built-up (Red)</span>
+                <span className="legend-swatch" style={{ background: "#dc3545" }} />
+                <span>Estimated roofs / built-up (Red)</span>
               </span>
             )}
             {showLandClass("bare_pervious") && (
@@ -564,8 +564,8 @@ export const VisualResultCard: React.FC<VisualResultCardProps> = ({
             )}
             {showLandClass("road") && (
               <span className="visual-legend-item">
-                <span className="legend-swatch" style={{ background: "#facc15" }} />
-                <span>Roads & Paved (Yellow)</span>
+                <span className="legend-swatch" style={{ background: "#f5c81e" }} />
+                <span>Estimated roads / paving (Yellow)</span>
               </span>
             )}
             {showLandClass("vegetation") && (

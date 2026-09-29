@@ -158,6 +158,35 @@ def check_land_result(
 # Composite Pixel Land-Cover Pipeline
 # ---------------------------------------------------------------------------
 
+def reconcile_roofs_and_pavement(
+    labels: np.ndarray,
+    primary_probability: np.ndarray,
+    secondary_probability: np.ndarray,
+    valid: np.ndarray,
+) -> tuple[np.ndarray, dict[str, int]]:
+    """Cross-check Deepness roofs/roads against independent FLAIR classes."""
+    if labels.shape != valid.shape or primary_probability.shape != (5, *labels.shape) or secondary_probability.shape != (19, *labels.shape):
+        raise ValueError("Aerial surface evidence grids do not align.")
+    refined = labels.copy()
+    roof_support = secondary_probability[0] + secondary_probability[1]
+    paved_support = secondary_probability[3]
+    roof_score = primary_probability[1]
+    road_score = primary_probability[4]
+    # A paved surface is not a building. Require two models to agree before
+    # converting a primary roof label into a road/paved label.
+    false_roof = valid & (refined == 3) & (roof_support < 0.20) & (paved_support >= 0.65) & (road_score >= 0.30)
+    refined[false_roof] = 6
+    missing_roof = valid & (refined == 4) & (roof_support >= 0.65) & (roof_score >= 0.30)
+    refined[missing_roof] = 3
+    missing_pavement = valid & (refined == 4) & (paved_support >= 0.65) & (road_score >= 0.30) & (road_score > roof_score)
+    refined[missing_pavement] = 6
+    return refined, {
+        "false_roof_to_paved": int(false_roof.sum()),
+        "additional_roof_pixels": int(missing_roof.sum()),
+        "additional_paved_pixels": int(missing_pavement.sum()),
+    }
+
+
 def classify_land_cover_composite(
     image_path: Path, output_dir: Path, query: str = "", max_size: int | None = None,
     water_result: dict | None = None, building_result: dict | None = None,
@@ -368,6 +397,17 @@ def classify_land_cover_composite(
             supplemental_pixels[{7: "bare_pervious", 2: "vegetation", 8: "agriculture", 5: "woodland"}[class_id]] = int(selected.sum())
             if model_confidence is not None:
                 model_confidence[selected] = flair_confidence[selected]
+        if building_result is None:
+            labels, roof_pavement_audit = reconcile_roofs_and_pavement(labels, model_probability, flair_prob, valid)
+            supplemental_pixels.update(roof_pavement_audit)
+        # Pools are visually distinct from grass and open-water bodies. A
+        # strong dedicated aerial class may correct an otherwise unknown or
+        # vegetation-colored pool, without overriding canonical water/roofs.
+        pool_pixels = (valid & supplemental_flair["valid"] & (flair_class == 2)
+                       & (flair_confidence >= .80) & (flair_margin >= .20)
+                       & np.isin(labels, [2, 4, 5]))
+        labels[pool_pixels] = 10
+        supplemental_pixels["swimming_pool"] = int(pool_pixels.sum())
         limitations.append(
             "Bare soil, pervious ground, grass and agricultural classes added only where the "
             "supplemental FLAIR-HUB aerial model is confident; transfer accuracy is unmeasured."

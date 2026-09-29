@@ -13,6 +13,21 @@ from PIL import Image, ImageDraw
 from satquery_engine.services.raster import _area_square_meters, render_preview
 
 
+def instance_edges(labels: np.ndarray) -> np.ndarray:
+    """Mark the complete four-sided outline of every positive instance ID."""
+    selected = labels > 0
+    edges = np.zeros(labels.shape, dtype=bool)
+    edges[0] = selected[0]
+    edges[-1] = selected[-1]
+    edges[:, 0] = selected[:, 0]
+    edges[:, -1] = selected[:, -1]
+    edges[1:] |= selected[1:] & (labels[1:] != labels[:-1])
+    edges[:-1] |= selected[:-1] & (labels[:-1] != labels[1:])
+    edges[:, 1:] |= selected[:, 1:] & (labels[:, 1:] != labels[:, :-1])
+    edges[:, :-1] |= selected[:, :-1] & (labels[:, :-1] != labels[:, 1:])
+    return edges
+
+
 def export_float_raster(values, source, destination):
     with rasterio.open(source) as src:
         grid=src.transform @ Affine.scale(src.width/values.shape[1],src.height/values.shape[0])
@@ -80,10 +95,7 @@ def export_labels(labels, source: Path, output: Path, name: str, scores=None, tr
     preview = Image.open(preview_path).convert("RGBA")
     overlay = Image.alpha_composite(preview, Image.fromarray(rgba).resize(preview.size, Image.Resampling.NEAREST))
     if name == "buildings":
-        edges = np.zeros(labels.shape, dtype=bool)
-        edges[1:] |= labels[1:] != labels[:-1]
-        edges[:,1:] |= labels[:,1:] != labels[:,:-1]
-        edges &= labels > 0
+        edges = instance_edges(labels)
         border = np.zeros((*labels.shape,4),dtype='uint8'); border[edges] = [255,255,255,230]
         overlay = Image.alpha_composite(overlay, Image.fromarray(border).resize(preview.size, Image.Resampling.NEAREST))
         draw = ImageDraw.Draw(overlay)
