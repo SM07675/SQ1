@@ -900,7 +900,11 @@ def execute_water_pipeline(
                             candidate = predict_flair_hub(path)
                             water_index, vegetation_indexes, built_indexes = 6, (8, 9, 11, 12, 13, 14), (0, 1, 3)
                         except (ValueError, RuntimeError, ImportError, OSError) as flair_error:
-                            fallback_events.append(f"FLAIR_HUB_UNAVAILABLE: {flair_error}; using validated legacy aerial specialist.")
+                            if not _legacy_mocked:
+                                raise ValueError(
+                                    f"FLAIR_HUB_UNAVAILABLE: {flair_error}; RGB water boundaries require "
+                                    "agreement from both aerial models and were withheld."
+                                ) from flair_error
                             from satquery_engine.services.landcover_specialist import predict_landcover, CLASSES
                             candidate = predict_landcover(path)
                             if tuple(candidate["classes"]) != CLASSES:

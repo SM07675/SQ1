@@ -114,3 +114,16 @@ def test_invalid_aerial_output_withholds_unverified_water(tmp_path, monkeypatch)
     assert result["selected_pixels"] == 0
     assert result["evidence_state"] == "INSUFFICIENT_EVIDENCE"
     validate_result_evidence(result, tmp_path / "out")
+
+
+def test_missing_flair_checkpoint_withholds_single_model_water(tmp_path, monkeypatch):
+    import satquery_engine.services.flair_hub as flair
+
+    def missing_checkpoint(_path):
+        raise OSError("FLAIR checkpoint missing")
+
+    monkeypatch.setattr(flair, "predict_flair_hub", missing_checkpoint)
+    result = execute_water_pipeline(source(tmp_path), tmp_path / "out")
+    assert result["selected_pixels"] == 0
+    assert result["evidence_state"] == "INSUFFICIENT_EVIDENCE"
+    assert any("FLAIR_HUB_UNAVAILABLE" in event for event in result["fallback_events"])
