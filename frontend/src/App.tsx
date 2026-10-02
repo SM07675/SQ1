@@ -17,6 +17,7 @@ import type {
   ThemeMode,
   AnalysisRunRecord,
   AnalysisResponse,
+  ClusterState,
 } from "./types";
 import { TopNav } from "./components/navigation/TopNav";
 import { HistoryDrawer } from "./components/navigation/HistoryDrawer";
@@ -142,7 +143,7 @@ export default function App() {
   // Cluster Scale-to-Zero State
   const [isWakeModalOpen, setIsWakeModalOpen] = useState(false);
   const [clusterOnline, setClusterOnline] = useState(false);
-  const [clusterState, setClusterState] = useState<"online" | "starting" | "standby">("starting");
+  const [clusterState, setClusterState] = useState<ClusterState>("checking");
   const [autoFocusTrigger, setAutoFocusTrigger] = useState(0);
   const [pendingMessage, setPendingMessage] = useState<{
     query: string;
@@ -189,13 +190,25 @@ export default function App() {
   // Initial cluster health check on arrival / page visit
   useEffect(() => {
     let active = true;
+    let resolved = false;
+
+    // If backend doesn't respond within 500ms, it is cold-starting/booting -> show status message
+    const probeTimer = setTimeout(() => {
+      if (active && !resolved) {
+        setClusterOnline(false);
+        setClusterState("starting");
+      }
+    }, 500);
+
     const checkClusterOnArrival = async () => {
       try {
         const healthUrl = API_BASE ? `${API_BASE}/health` : "/health";
-        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(20000) });
+        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(10000) });
         if (res.ok) {
           const data = await res.json().catch(() => null);
           if (data && (data.status === "ok" || data.environment || data.models)) {
+            resolved = true;
+            clearTimeout(probeTimer);
             if (active) {
               setClusterOnline(true);
               setClusterState("online");
@@ -206,46 +219,61 @@ export default function App() {
           }
         }
       } catch {
-        // Timeout or connection refused - node is asleep / booting
+        // Timeout or connection refused - node is initializing
       }
 
+      resolved = true;
+      clearTimeout(probeTimer);
       if (active) {
-        // Node is asleep / powered off / starting:
-        // Automatically show "Waiting for system to start..." modal and wake it
         setClusterOnline(false);
         setClusterState("starting");
-        setIsWakeModalOpen(true);
       }
     };
 
     checkClusterOnArrival();
     return () => {
       active = false;
+      clearTimeout(probeTimer);
     };
   }, [triggerFocusQueryInput]);
 
-  // Background watcher to detect when cluster becomes ready even if modal was dismissed
+  // Continuous background health polling:
+  // - Polls every 3s while "starting" to remove message as soon as backend becomes ready
+  // - Polls every 10s while "online" to re-show initialization status if backend becomes unavailable
   useEffect(() => {
-    if (clusterOnline) return;
+    let active = true;
+    const pollIntervalTime = clusterState === "starting" ? 3000 : 10000;
 
     const interval = setInterval(async () => {
       try {
         const healthUrl = API_BASE ? `${API_BASE}/health` : "/health";
-        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(15000) });
+        const res = await fetch(healthUrl, { signal: AbortSignal.timeout(8000) });
         if (res.ok) {
           const data = await res.json().catch(() => null);
           if (data && (data.status === "ok" || data.environment || data.models)) {
-            clearInterval(interval);
-            handleClusterReady();
+            if (active && (!clusterOnline || clusterState !== "online")) {
+              handleClusterReady();
+            }
+            return;
           }
         }
+        if (active && clusterOnline) {
+          setClusterOnline(false);
+          setClusterState("starting");
+        }
       } catch {
-        // Still booting
+        if (active && clusterOnline) {
+          setClusterOnline(false);
+          setClusterState("starting");
+        }
       }
-    }, 3000);
+    }, pollIntervalTime);
 
-    return () => clearInterval(interval);
-  }, [clusterOnline, handleClusterReady]);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [clusterOnline, clusterState, handleClusterReady]);
 
   const handleToggleClusterPower = () => {
     if (clusterOnline) {
@@ -450,8 +478,7 @@ export default function App() {
     if (!clusterOnline) {
       setPendingMessage({ query: effectiveQuery, pairType, files });
       setClusterState("starting");
-      setIsWakeModalOpen(true);
-      addToast("info", "AI Node is warming up. Query will run automatically once the node starts.");
+      addToast("info", "SatQuery is initializing its analysis backend and models. Please allow up to 2 minutes for startup.");
       return;
     }
 
@@ -622,24 +649,6 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      {/* Cluster starting sticky top banner (if user dismissed modal but node is booting) */}
-      {clusterState === "starting" && !isWakeModalOpen && (
-        <div
-          className="cluster-starting-top-banner"
-          onClick={() => setIsWakeModalOpen(true)}
-          role="button"
-          tabIndex={0}
-          title="Click to view live node startup progress"
-        >
-          <div className="cluster-starting-banner-inner">
-            <span className="cluster-starting-beacon" />
-            <span className="cluster-starting-msg">
-              Waiting for Google Cloud Run to respond...
-            </span>
-            <span className="cluster-starting-cta">View Live Progress &rarr;</span>
-          </div>
-        </div>
-      )}
 
       {/* 2. Floating Left Sidebar (transfers top navigation to left sidebar per design reference) */}
       <FloatingSidebar

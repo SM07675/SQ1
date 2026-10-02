@@ -1,5 +1,7 @@
 export type VerdictStatus = "supported" | "supported_with_limitations" | "disputed" | "insufficient_evidence" | "low_confidence" | "invalid_input" | "unsupported_task" | "model_unavailable" | "degraded_analysis";
 
+export type ClusterState = "online" | "starting" | "standby" | "checking";
+
 export interface StructuredLimitation {
   type: string;
   task: string;

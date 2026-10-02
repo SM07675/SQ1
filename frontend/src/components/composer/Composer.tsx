@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, ArrowUp, Paperclip, X, Image as ImageIcon, ImagePlus, CheckCircle2 } from "lucide-react";
+import { Plus, ArrowUp, Paperclip, X, Image as ImageIcon, ImagePlus, CheckCircle2, Loader2 } from "lucide-react";
 import { AttachmentTray, type AttachedFileItem } from "./AttachmentTray";
 import { convertTiffToDataUrl } from "../../utils/tiffViewer";
+import type { ClusterState } from "../../types";
 
 interface ComposerProps {
   onSendMessage: (query: string, pairType: string, files: File[]) => Promise<void>;
@@ -14,7 +15,7 @@ interface ComposerProps {
   initialQuery?: string;
   initialFiles?: File[];
   clusterOnline?: boolean;
-  clusterState?: "online" | "starting" | "standby";
+  clusterState?: ClusterState;
   autoFocusTrigger?: number;
   onOpenWakeModal?: () => void;
 }
@@ -235,13 +236,13 @@ export const Composer: React.FC<ComposerProps> = ({
         <div
           className="composer-cluster-starting-pill"
           onClick={onOpenWakeModal}
-          role="button"
-          tabIndex={0}
-          title="Click to view startup progress"
+          role="status"
+          aria-live="polite"
+          title="SatQuery is initializing its analysis backend and models. Please allow up to 2 minutes for startup."
         >
+          <Loader2 size={13} className="spin-animate backend-init-spinner" />
           <span className="home-cluster-starting-dot" />
-          <span>Waiting for the analysis service to respond...</span>
-          <span className="home-cluster-view-btn">View Status &rarr;</span>
+          <span>SatQuery is initializing its analysis backend and models. Please allow up to 2 minutes for startup.</span>
         </div>
       )}
 

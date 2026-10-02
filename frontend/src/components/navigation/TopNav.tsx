@@ -13,7 +13,7 @@ import {
   History,
   Shield,
 } from "lucide-react";
-import type { NavTab, ThemeMode } from "../../types";
+import type { NavTab, ThemeMode, ClusterState } from "../../types";
 import type { AuthUser } from "../views/LoginPage";
 
 interface TopNavProps {
@@ -27,7 +27,7 @@ interface TopNavProps {
   onOpenCommandPalette: () => void;
   onOpenSettings: () => void;
   clusterOnline?: boolean;
-  clusterState?: "online" | "starting" | "standby";
+  clusterState?: ClusterState;
   onToggleClusterPower?: () => void;
   authUser?: AuthUser | null;
   onLogout?: () => void;
@@ -201,14 +201,14 @@ export const TopNav: React.FC<TopNavProps> = ({
             className={`cluster-power-pill ${clusterState || (clusterOnline ? "online" : "standby")}`}
             title={
               clusterState === "starting"
-                ? "Checking Google Cloud Run health"
+                ? "SatQuery is initializing its analysis backend and models. Please allow up to 2 minutes for startup."
                 : clusterOnline
                 ? "Google Cloud Run is responding; automatic scaling is enabled"
                 : "Google Cloud Run is unavailable; click to retry"
             }
             aria-label={
               clusterState === "starting"
-                ? "Cluster is Starting"
+                ? "Cluster is Initializing"
                 : clusterOnline
                 ? "Google Cloud Run is Online"
                 : "Cluster is in Standby"
@@ -217,7 +217,9 @@ export const TopNav: React.FC<TopNavProps> = ({
             <span className="cluster-power-dot" />
             <span>
               {clusterState === "starting"
-                ? "Starting..."
+                ? "Initializing..."
+                : clusterState === "checking"
+                ? "Connecting..."
                 : clusterOnline
                 ? "Cloud Run Online"
                 : "Retry Connection"}

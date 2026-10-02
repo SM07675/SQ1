@@ -7,8 +7,9 @@ import {
   TrendingUp,
   ArrowUp,
   ImagePlus,
+  Loader2,
 } from "lucide-react";
-import type { ChatSummary } from "../../types";
+import type { ChatSummary, ClusterState } from "../../types";
 import { AttachmentTray, type AttachedFileItem } from "../composer/AttachmentTray";
 import { convertTiffToDataUrl } from "../../utils/tiffViewer";
 
@@ -18,7 +19,7 @@ interface HomeZeroStateProps {
   recentChats: ChatSummary[];
   onSelectChat: (chatId: string) => void;
   clusterOnline?: boolean;
-  clusterState?: "online" | "starting" | "standby";
+  clusterState?: ClusterState;
   autoFocusTrigger?: number;
   onOpenWakeModal?: () => void;
 }
@@ -261,13 +262,13 @@ export const HomeZeroState: React.FC<HomeZeroStateProps> = ({
             <div
               className="home-cluster-starting-pill"
               onClick={onOpenWakeModal}
-              role="button"
-              tabIndex={0}
-              title="Click to view node startup progress"
+              role="status"
+              aria-live="polite"
+              title="SatQuery is initializing its analysis backend and models. Please allow up to 2 minutes for startup."
             >
+              <Loader2 size={13} className="spin-animate backend-init-spinner" />
               <span className="home-cluster-starting-dot" />
-              <span>Waiting for the analysis service to respond...</span>
-              <span className="home-cluster-view-btn">View Live Status &rarr;</span>
+              <span>SatQuery is initializing its analysis backend and models. Please allow up to 2 minutes for startup.</span>
             </div>
           )}
 
